@@ -1,4 +1,4 @@
-const CACHE = 'fincontrol-preview-v1';
+const CACHE = 'fincontrol-preview-v2';
 const ASSETS = ['./mobile-preview.html', './manifest.webmanifest', './sample-data.json', './icon-192.png', './icon-512.png', './apple-touch-icon.png', './favicon.svg'];
 
 self.addEventListener('install', (e) => {
