@@ -486,6 +486,10 @@
             </div>
           </div>
           <div class="field">
+            <label>Categoria</label>
+            <select id="f-category"></select>
+          </div>
+          <div class="field">
             <label>Nota</label>
             <textarea id="f-note" rows="3" placeholder="Observações, detalhes extra..."></textarea>
           </div>
@@ -2230,6 +2234,17 @@
         menu.classList.toggle('open'); fab.classList.toggle('open');
       },
 
+      fillFormCategories(type, selectedId) {
+        const scope = this.formScope || 'personal';
+        const cats = type === 'income'
+          ? this.state.categories.filter(c => c.scope === 'income')
+          : this.state.categories.filter(c => c.scope === scope);
+        const sel = document.getElementById('f-category');
+        sel.innerHTML = cats.map(c => `<option value="${c.id}">${c.icon} ${esc(c.name)}</option>`).join('');
+        if (selectedId && cats.some(c => c.id === selectedId)) sel.value = selectedId;
+        else if (cats.length) sel.value = cats[0].id;
+      },
+
       openForm(type, editId, dateIso) {
         this.formType=type;
         this.editingTxId = editId || null;
@@ -2247,7 +2262,6 @@
           const noteParts = [editing.note, editing.description, editing.location].filter(Boolean);
           document.getElementById('f-note').value=noteParts.join(' · ');
           document.getElementById('f-date').value=isoToDisplay(editing.date);
-          this.editingCategoryId = editing.categoryId;
           this.formScope=editing.scope||'personal';
           document.querySelectorAll('#f-scope-wrap button').forEach(b=>b.classList.toggle('active',b.dataset.scope===this.formScope));
           if (editing.receiptId) {
@@ -2263,19 +2277,18 @@
           document.getElementById('f-amount').value='';
           document.getElementById('f-note').value='';
           document.getElementById('f-date').value=isoToDisplay(dateIso || today());
-          this.editingCategoryId = null;
           this.formScope='personal';
           document.querySelectorAll('#f-scope-wrap button').forEach(b=>b.classList.toggle('active',b.dataset.scope==='personal'));
           this.setNoReceipt();
         }
 
+        this.fillFormCategories(type, editing?.categoryId);
         document.getElementById('form-overlay').classList.add('open');
       },
 
       closeForm() {
         document.getElementById('form-overlay').classList.remove('open');
         this.editingTxId = null;
-        this.editingCategoryId = null;
         this.setNoReceipt();
       },
 
@@ -2312,6 +2325,7 @@
       setScope(s) {
         this.formScope=s;
         document.querySelectorAll('#f-scope-wrap button').forEach(b=>b.classList.toggle('active',b.dataset.scope===s));
+        if (this.formType === 'expense') this.fillFormCategories('expense');
       },
 
       submitForm(e) {
@@ -2325,7 +2339,7 @@
         const tx={
           id: this.editingTxId || uid(),
           type:this.formType, amount,
-          categoryId: this.editingCategoryId || defaultCategoryId(this.formType, scope),
+          categoryId: document.getElementById('f-category').value || defaultCategoryId(this.formType, scope),
           description:'',
           location:'',
           note:document.getElementById('f-note').value.trim()||undefined,
