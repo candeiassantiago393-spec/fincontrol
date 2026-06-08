@@ -1001,6 +1001,21 @@
       return `${y}-${String(m+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
     }
 
+    function recurringStartsOn(r) {
+      const raw = r.createdAt || r.activeFrom;
+      return raw ? String(raw).slice(0, 10) : today();
+    }
+
+    function shouldCountRecurringOn(r, chargeDateStr) {
+      return chargeDateStr >= recurringStartsOn(r);
+    }
+
+    function pushRecurringCharge(result, r, ds) {
+      if (!shouldCountRecurringOn(r, ds)) return;
+      result.push({ id:`rec-${r.id}-${ds}`, type:'expense', amount:r.amount, categoryId:r.categoryId,
+        description:r.name, location:r.location, date:ds, scope:r.scope, isRecurring:true, recurringId:r.id });
+    }
+
     function expandRecurring(period, ref=new Date()) {
       const items = (App.state.recurring||[]).filter(r=>r.active);
       const result = [];
@@ -1008,21 +1023,18 @@
       items.forEach(r => {
         if (period==='month') {
           const ds = chargeDate(s.getFullYear(), s.getMonth(), r.dayOfMonth);
-          result.push({ id:`rec-${r.id}-${ds}`, type:'expense', amount:r.amount, categoryId:r.categoryId,
-            description:r.name, location:r.location, date:ds, scope:r.scope, isRecurring:true, recurringId:r.id });
+          pushRecurringCharge(result, r, ds);
         } else if (period==='year') {
           for (let m = 0; m < 12; m++) {
             const ds = chargeDate(s.getFullYear(), m, r.dayOfMonth);
-            result.push({ id:`rec-${r.id}-${ds}`, type:'expense', amount:r.amount, categoryId:r.categoryId,
-              description:r.name, location:r.location, date:ds, scope:r.scope, isRecurring:true, recurringId:r.id });
+            pushRecurringCharge(result, r, ds);
           }
         } else {
           const cur = new Date(s);
           while (cur <= e) {
             const ds = chargeDate(cur.getFullYear(), cur.getMonth(), r.dayOfMonth);
             if (ds === cur.toISOString().slice(0,10)) {
-              result.push({ id:`rec-${r.id}-${ds}`, type:'expense', amount:r.amount, categoryId:r.categoryId,
-                description:r.name, location:r.location, date:ds, scope:r.scope, isRecurring:true, recurringId:r.id });
+              pushRecurringCharge(result, r, ds);
             }
             cur.setDate(cur.getDate()+1);
           }
@@ -1768,6 +1780,15 @@
 
       ensureStateFields() {
         if (!this.state.recurring) { this.state.recurring = []; this.save(); }
+        else {
+          let touched = false;
+          this.state.recurring = this.state.recurring.map((r) => {
+            if (r.createdAt) return r;
+            touched = true;
+            return { ...r, createdAt: today() + 'T12:00:00.000Z' };
+          });
+          if (touched) this.save();
+        }
         if (!this.state.savingsGoal) { this.state.savingsGoal = { ...DEFAULT_SAVINGS }; this.save(); }
         if (!this.state.spendingAlert) { this.state.spendingAlert = { ...DEFAULT_SPENDING_ALERT }; this.save(); }
         if (!this.state.financialGoals) { this.state.financialGoals = []; this.save(); }
@@ -2006,7 +2027,7 @@
           <div class="card" style="padding:0 16px">
             <div style="display:flex;justify-content:space-between;align-items:center;padding:12px 0;border-bottom:1px solid #f1f5f9">
               <div><div style="font-size:14px;font-weight:600">Gastos fixos mensais</div>
-                <div style="font-size:11px;color:#94a3b8">Contam automaticamente todos os meses</div></div>
+                <div style="font-size:11px;color:#94a3b8">Contam a partir do dia em que crias — não em meses anteriores</div></div>
               <button onclick="App.openRecurringForm()" style="border:none;background:none;color:#0f766e;font-size:13px;font-weight:500;cursor:pointer">+ Novo</button>
             </div>
             ${recList || '<div class="empty" style="padding:20px">Sem gastos fixos</div>'}
@@ -2992,6 +3013,9 @@
         const name=document.getElementById('r-name').value.trim();
         const amount=parseFloat(document.getElementById('r-amount').value.replace(',','.'));
         if(!name||!amount||amount<=0) return;
+        const existing = this.editingRecurringId
+          ? this.state.recurring.find(x => x.id === this.editingRecurringId)
+          : null;
         const item={
           id:this.editingRecurringId||uid(),
           name, amount,
@@ -3000,6 +3024,7 @@
           location:document.getElementById('r-location').value.trim(),
           dayOfMonth:Math.min(28,Math.max(1,parseInt(document.getElementById('r-day').value)||1)),
           active:true,
+          createdAt: existing?.createdAt || new Date().toISOString(),
         };
         if(this.editingRecurringId) {
           const idx=this.state.recurring.findIndex(x=>x.id===this.editingRecurringId);
