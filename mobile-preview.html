@@ -188,6 +188,12 @@
     .btn-primary { width: 100%; padding: 14px; border: none; border-radius: 12px; background: #0f766e; color: white; font-size: 15px; font-weight: 600; cursor: pointer; margin-top: 4px; }
     .btn-primary:active { background: #115e59; }
     .btn-secondary { width: 100%; padding: 12px; border: 1px solid #e2e8f0; border-radius: 12px; background: white; color: #64748b; font-size: 14px; font-weight: 500; cursor: pointer; margin-bottom: 12px; }
+    .cal-action-sub { font-size: 13px; color: #64748b; margin: 0 20px 12px; }
+    .cal-action-btn { width: calc(100% - 40px); margin: 0 20px 10px; padding: 14px 16px; border: none; border-radius: 14px; font-size: 15px; font-weight: 600; cursor: pointer; text-align: left; display: flex; align-items: center; gap: 10px; }
+    .cal-action-btn.expense { background: #f0fdfa; color: #0f766e; }
+    .cal-action-btn.income { background: #ecfdf5; color: #059669; }
+    .cal-action-btn.savings { background: #eff6ff; color: #2563eb; }
+    .cal-action-cancel { width: calc(100% - 40px); margin: 4px 20px 20px; padding: 12px; border: 1px solid #e2e8f0; border-radius: 12px; background: white; color: #64748b; font-size: 14px; font-weight: 500; cursor: pointer; }
     .upload-zone { border: 2px dashed #99f6e4; background: #f0fdfa80; border-radius: 16px; padding: 28px; text-align: center; color: #0f766e; font-weight: 500; font-size: 14px; cursor: pointer; margin-bottom: 14px; }
     .album-storage { border-radius: 12px; padding: 12px 14px; margin-bottom: 12px; border: 1px solid #e2e8f0; background: #f8fafc; }
     .album-storage.warn { border-color: #fde68a; background: #fffbeb; }
@@ -635,6 +641,20 @@
           <button type="submit" class="btn-primary" id="cat-submit-btn">Criar</button>
         </form>
       </div>
+    </div>
+  </div>
+
+  <div class="overlay" id="cal-action-overlay" onclick="if(event.target===this)App.closeCalAction()">
+    <div class="sheet">
+      <div class="sheet-header">
+        <h2 id="cal-action-title">Adicionar</h2>
+        <button class="sheet-close" onclick="App.closeCalAction()">×</button>
+      </div>
+      <p class="cal-action-sub" id="cal-action-sub">Escolhe o tipo de movimento</p>
+      <button type="button" class="cal-action-btn expense" onclick="App.calAdd('expense')">💸 Novo Gasto</button>
+      <button type="button" class="cal-action-btn income" onclick="App.calAdd('income')">💰 Novo Ganho</button>
+      <button type="button" class="cal-action-btn savings" onclick="App.calAdd('savings')">🐷 Nova Poupança</button>
+      <button type="button" class="cal-action-cancel" onclick="App.closeCalAction()">Cancelar</button>
     </div>
   </div>
 
@@ -2221,7 +2241,27 @@
       },
 
       changeMonth(d) { this.calMonth+=d; if(this.calMonth>11){this.calMonth=0;this.calYear++;} if(this.calMonth<0){this.calMonth=11;this.calYear--;} this.render(); },
-      selectCalDay(ds) { this.calSelected=ds; this.render(); },
+
+      selectCalDay(ds) {
+        this.calSelected = ds;
+        document.getElementById('cal-action-title').textContent = fmtDateLong(ds);
+        document.getElementById('cal-action-sub').textContent = locale === 'en'
+          ? 'Add a movement for this day'
+          : 'Adicionar movimento neste dia';
+        document.getElementById('cal-action-overlay').classList.add('open');
+        this.render();
+      },
+
+      closeCalAction() {
+        document.getElementById('cal-action-overlay').classList.remove('open');
+      },
+
+      calAdd(kind) {
+        const ds = this.calSelected;
+        this.closeCalAction();
+        if (kind === 'savings') this.openSavingsTransfer(ds);
+        else this.openForm(kind, null, ds);
+      },
 
       renderCategorias() {
         const groups=[{title:'Pessoais',scope:'personal',budget:true},{title:'Profissionais',scope:'professional',budget:true},{title:'Ganhos',scope:'income',budget:false}];
@@ -2261,7 +2301,7 @@
         menu.classList.toggle('open'); fab.classList.toggle('open');
       },
 
-      openForm(type, editId) {
+      openForm(type, editId, dateIso) {
         this.formType=type;
         this.editingTxId = editId || null;
         const editing = editId ? this.state.transactions.find(t => t.id === editId) : null;
@@ -2300,7 +2340,7 @@
           document.getElementById('f-desc').value='';
           document.getElementById('f-location').value='';
           document.getElementById('f-note').value='';
-          document.getElementById('f-date').value=isoToDisplay(today());
+          document.getElementById('f-date').value=isoToDisplay(dateIso || today());
           this.formScope='personal';
           document.querySelectorAll('#f-scope-wrap button').forEach(b=>b.classList.toggle('active',b.dataset.scope==='personal'));
           this.setNoReceipt();
@@ -2783,14 +2823,15 @@
         }
       },
 
-      openSavingsTransfer() {
+      openSavingsTransfer(dateIso) {
         document.getElementById('fab-menu').classList.remove('open');
         document.getElementById('fab').classList.remove('open');
-        this.transferSummaryMode = 'month';
-        document.querySelectorAll('#st-mode-toggle button').forEach(b => b.classList.toggle('active', b.dataset.mode === 'month'));
+        const fromCalendar = !!dateIso;
+        this.transferSummaryMode = fromCalendar ? 'day' : 'month';
+        document.querySelectorAll('#st-mode-toggle button').forEach(b => b.classList.toggle('active', b.dataset.mode === this.transferSummaryMode));
         const lbl = document.getElementById('st-date-label');
-        if (lbl) lbl.textContent = 'Data (define o mês)';
-        document.getElementById('st-date').value = isoToDisplay(today());
+        if (lbl) lbl.textContent = fromCalendar ? 'Data' : 'Data (define o mês)';
+        document.getElementById('st-date').value = isoToDisplay(dateIso || today());
         document.getElementById('st-amount').value = '';
         document.getElementById('st-note').value = '';
         this.updateTransferPreview();
