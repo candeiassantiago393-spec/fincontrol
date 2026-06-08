@@ -1,0 +1,20 @@
+{
+  "name": "FinControl",
+  "short_name": "FinControl",
+  "description": "Controlo financeiro pessoal",
+  "start_url": "./mobile-preview.html",
+  "display": "standalone",
+  "background_color": "#181818",
+  "theme_color": "#0f766e",
+  "lang": "en",
+  "scope": "./",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}
