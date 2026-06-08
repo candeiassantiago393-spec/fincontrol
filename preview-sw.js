@@ -1,7 +1,7 @@
-const CACHE = 'fincontrol-preview-v17';
+const CACHE = 'fincontrol-preview-v18';
 const DATA_CACHE = 'fincontrol-data-v1';
 const BACKUP_CACHE_URL = '/__fincontrol_backup__';
-const ASSETS = ['./mobile-preview.html', './manifest.webmanifest', './sample-data.json', './icon-192.png', './icon-512.png', './apple-touch-icon.png', './favicon.svg'];
+const ASSETS = ['./index.html', './mobile-preview.html', './manifest.webmanifest', './sample-data.json', './icon-192.png', './icon-512.png', './apple-touch-icon.png', './favicon.svg'];
 
 self.addEventListener('install', (e) => {
   e.waitUntil(caches.open(CACHE).then((c) => c.addAll(ASSETS)).then(() => self.skipWaiting()));
@@ -42,7 +42,7 @@ function isNetworkFirst(request) {
 self.addEventListener('fetch', (e) => {
   if (!isNetworkFirst(e.request)) {
     e.respondWith(
-      caches.match(e.request).then((cached) => cached || fetch(e.request).catch(() => caches.match('./mobile-preview.html'))),
+      caches.match(e.request).then((cached) => cached || fetch(e.request).catch(() => caches.match('./index.html'))),
     );
     return;
   }
@@ -53,6 +53,6 @@ self.addEventListener('fetch', (e) => {
         caches.open(CACHE).then((c) => c.put(e.request, clone));
       }
       return res;
-    }).catch(() => caches.match(e.request).then((cached) => cached || caches.match('./mobile-preview.html'))),
+    }).catch(() => caches.match(e.request).then((cached) => cached || caches.match('./index.html'))),
   );
 });

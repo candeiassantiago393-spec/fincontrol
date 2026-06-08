@@ -2,7 +2,7 @@
   "name": "FinControl",
   "short_name": "FinControl",
   "description": "Controlo financeiro pessoal",
-  "start_url": "./mobile-preview.html",
+  "start_url": "./index.html",
   "display": "standalone",
   "background_color": "#0f766e",
   "theme_color": "#0f766e",
