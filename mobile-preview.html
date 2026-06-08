@@ -3297,12 +3297,28 @@
       },
     };
 
-    if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.register('preview-sw.js').catch(() => {});
-      navigator.serviceWorker.ready.then(() => persistAllData()).catch(() => {});
+    function registerServiceWorker() {
+      if (!('serviceWorker' in navigator)) return;
+      let reloaded = false;
+      navigator.serviceWorker.addEventListener('controllerchange', () => {
+        if (reloaded) return;
+        reloaded = true;
+        location.reload();
+      });
+      navigator.serviceWorker.register('preview-sw.js', { updateViaCache: 'none' })
+        .then((reg) => {
+          reg.update().catch(() => {});
+          return navigator.serviceWorker.ready;
+        })
+        .then(() => persistAllData())
+        .catch(() => {});
     }
+    registerServiceWorker();
     restorePersistentData().then(() => App.init());
     document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible') {
+        navigator.serviceWorker?.getRegistration()?.then((r) => r?.update()).catch(() => {});
+      }
       if (document.visibilityState === 'hidden') void persistAllData();
     });
   </script>

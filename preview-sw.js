@@ -1,4 +1,4 @@
-const CACHE = 'fincontrol-preview-v16';
+const CACHE = 'fincontrol-preview-v17';
 const DATA_CACHE = 'fincontrol-data-v1';
 const BACKUP_CACHE_URL = '/__fincontrol_backup__';
 const ASSETS = ['./mobile-preview.html', './manifest.webmanifest', './sample-data.json', './icon-192.png', './icon-512.png', './apple-touch-icon.png', './favicon.svg'];
@@ -8,10 +8,18 @@ self.addEventListener('install', (e) => {
 });
 
 self.addEventListener('activate', (e) => {
-  e.waitUntil(self.clients.claim());
+  e.waitUntil(
+    caches.keys().then((keys) =>
+      Promise.all(keys.filter((k) => k !== CACHE && k !== DATA_CACHE).map((k) => caches.delete(k))),
+    ).then(() => self.clients.claim()),
+  );
 });
 
 self.addEventListener('message', (e) => {
+  if (e.data?.type === 'SKIP_WAITING') {
+    self.skipWaiting();
+    return;
+  }
   if (e.data?.type !== 'SAVE_BACKUP' || !e.data.payload) return;
   e.waitUntil(
     caches.open(DATA_CACHE).then((cache) =>
@@ -23,8 +31,28 @@ self.addEventListener('message', (e) => {
   );
 });
 
+function isNetworkFirst(request) {
+  if (request.method !== 'GET') return false;
+  const url = new URL(request.url);
+  return request.mode === 'navigate'
+    || url.pathname.endsWith('.html')
+    || url.pathname.endsWith('preview-sw.js');
+}
+
 self.addEventListener('fetch', (e) => {
+  if (!isNetworkFirst(e.request)) {
+    e.respondWith(
+      caches.match(e.request).then((cached) => cached || fetch(e.request).catch(() => caches.match('./mobile-preview.html'))),
+    );
+    return;
+  }
   e.respondWith(
-    caches.match(e.request).then((cached) => cached || fetch(e.request).catch(() => caches.match('./mobile-preview.html'))),
+    fetch(e.request).then((res) => {
+      if (res && res.status === 200) {
+        const clone = res.clone();
+        caches.open(CACHE).then((c) => c.put(e.request, clone));
+      }
+      return res;
+    }).catch(() => caches.match(e.request).then((cached) => cached || caches.match('./mobile-preview.html'))),
   );
 });
