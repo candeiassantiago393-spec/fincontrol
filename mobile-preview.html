@@ -220,19 +220,6 @@
     .clickable:active { transform: scale(0.99); }
     .card-hint { font-size: 11px; color: #0f766e; font-weight: 500; text-align: center; margin-top: 8px; }
     .back-btn { display: flex; align-items: center; gap: 6px; border: none; background: none; color: #0f766e; font-size: 13px; font-weight: 500; cursor: pointer; margin-bottom: 8px; padding: 0; }
-    .chart-bar { display: flex; align-items: flex-end; gap: 6px; height: 110px; padding-top: 8px; }
-    .chart-bar .col { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 4px; height: 100%; justify-content: flex-end; }
-    .chart-bar .bar { width: 100%; border-radius: 6px 6px 0 0; min-height: 3px; transition: height .3s; }
-    .chart-bar .lbl { font-size: 7px; color: #94a3b8; line-height: 1.1; text-align: center; word-break: break-all; }
-    .chart-line { height: 110px; display: flex; align-items: flex-end; gap: 4px; }
-    .chart-line .point-col { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 3px; height: 100%; justify-content: flex-end; }
-    .chart-line .dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
-    .chart-line .stem { width: 2px; border-radius: 1px; min-height: 2px; }
-    .chart-hit { cursor: pointer; border-radius: 8px; padding: 2px 0; transition: opacity .15s; }
-    .chart-hit.active .bar { filter: brightness(1.12); box-shadow: 0 0 0 2px rgba(15,118,110,.3); }
-    .chart-hit.active .dot { transform: scale(1.35); box-shadow: 0 0 0 2px rgba(15,118,110,.3); }
-    .chart-drill { margin-top: 12px; padding-top: 12px; border-top: 1px solid #f1f5f9; }
-    .chart-drill-head { font-size: 11px; font-weight: 600; color: #64748b; margin-bottom: 8px; }
     .empty { text-align: center; padding: 32px 16px; color: #94a3b8; font-size: 14px; }
     .empty small { display: block; margin-top: 6px; font-size: 12px; }
     .section-title { font-size: 11px; font-weight: 600; color: #94a3b8; text-transform: uppercase; letter-spacing: .05em; padding: 10px 0 4px; }
@@ -1009,30 +996,6 @@
     }
     function esc(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/"/g,'&quot;'); }
 
-    function barChart(data, color, chartKey, selectedIndex) {
-      const max = Math.max(...data.map(d=>d.total), 1);
-      return `<div class="chart-bar">${data.map((d,i)=>`
-        <div class="col chart-hit ${selectedIndex===i?'active':''}" onclick="event.stopPropagation();App.selectChartPoint('${chartKey}',${i})">
-          <div class="bar" style="height:${Math.max(3,d.total/max*100)}%;background:${color}"></div>
-          <div class="lbl">${esc(d.label)}</div></div>`).join('')}</div>`;
-    }
-    function lineChart(data, color, chartKey, selectedIndex) {
-      const max = Math.max(...data.map(d=>d.total), 1);
-      return `<div class="chart-line">${data.map((d,i)=>`
-        <div class="point-col chart-hit ${selectedIndex===i?'active':''}" onclick="event.stopPropagation();App.selectChartPoint('${chartKey}',${i})">
-          <div class="stem" style="height:${Math.max(2,d.total/max*85)}%;background:${color}"></div>
-          <div class="dot" style="background:${color}"></div><div class="lbl">${esc(d.label)}</div></div>`).join('')}</div>`;
-    }
-
-    function savingsTotalForSlice(slicePeriod, ref) {
-      const transfers = App.state.savingsTransfers || [];
-      if (slicePeriod==='day') {
-        const ds = ref.toISOString().slice(0,10);
-        return sum(transfers.filter(t=>t.date===ds));
-      }
-      return sum(transfers.filter(t=>inPeriod(t.date, slicePeriod, ref)));
-    }
-
     function filterSavings(period, ref=new Date()) {
       return (App.state.savingsTransfers||[]).filter(t=>inPeriod(t.date, period, ref));
     }
@@ -1052,99 +1015,6 @@
         </div>
         <button class="btn-del" onclick="event.stopPropagation();App.deleteSavingsTransfer('${t.id}')" title="Eliminar">×</button>
       </div>`;
-    }
-
-    function getTransactionsForPoint(point, type) {
-      const ref = new Date(point.refDate + 'T12:00:00');
-      if (type==='savings') {
-        const items = (App.state.savingsTransfers||[]).filter(t=>inPeriod(t.date, point.slicePeriod, ref));
-        return items.sort((a,b)=>b.date.localeCompare(a.date));
-      }
-      const items = type==='expense'
-        ? getAllExpenses(point.slicePeriod, ref)
-        : App.state.transactions.filter(t=>t.type==='income' && inPeriod(t.date, point.slicePeriod, ref));
-      return items.sort((a,b)=>b.date.localeCompare(a.date));
-    }
-
-    function chartDrilldownHtml(screen, period, type, data, sel) {
-      if (sel == null || !data[sel]) return '';
-      const point = data[sel];
-      const txs = getTransactionsForPoint(point, type);
-      return `<div class="chart-drill">
-        <div class="chart-drill-head">${esc(fmtDate(point.refDate))} — ${fmt(point.total)}</div>
-        ${txs.length
-          ? (type==='savings' ? txs.map(t=>savingsRow(t)).join('') : txs.map(t=>txRow(t)).join(''))
-          : '<div class="empty" style="padding:12px 0">Sem movimentos neste momento.</div>'}
-      </div>`;
-    }
-
-    function weeklyData(type, n=4) {
-      const data=[]; const now=new Date();
-      for(let i=n-1;i>=0;i--) {
-        const ref=new Date(now); ref.setDate(ref.getDate()-i*7);
-        const total = type==='expense'
-          ? sum(getAllExpenses('week', ref))
-          : sum(App.state.transactions.filter(t=>t.type==='income' && inPeriod(t.date,'week',ref)));
-        data.push({label:i===0?'Atual':`S-${i}`, total});
-      }
-      return data;
-    }
-    function monthlyData(type, n=6) {
-      const data=[]; const now=new Date();
-      for(let i=n-1;i>=0;i--) {
-        const ref=new Date(now.getFullYear(), now.getMonth()-i, 1);
-        const total = type==='expense'
-          ? sum(getAllExpenses('month', ref))
-          : sum(App.state.transactions.filter(t=>t.type==='income' && inPeriod(t.date,'month',ref)));
-        data.push({label:fmtDate(ref.toISOString().slice(0,10)), total});
-      }
-      return data;
-    }
-
-    function periodChartData(period, type) {
-      const now = new Date();
-      if (period==='day') {
-        const data=[];
-        for (let i=6;i>=0;i--) {
-          const ref=new Date(now); ref.setDate(ref.getDate()-i);
-          const ds=ref.toISOString().slice(0,10);
-          const total = type==='savings' ? savingsTotalForSlice('day',ref)
-            : type==='expense' ? sum(getAllExpenses('day',ref)) : sum(App.state.transactions.filter(t=>t.type==='income'&&t.date===ds));
-          data.push({label:fmtDate(ds), total, refDate:ds, slicePeriod:'day'});
-        }
-        return { data, title:'Últimos 7 dias', line:true };
-      }
-      if (period==='week') {
-        const {s}=periodRange('week',now);
-        const data=[];
-        for (let i=0;i<7;i++) {
-          const ref=new Date(s); ref.setDate(ref.getDate()+i);
-          const ds=ref.toISOString().slice(0,10);
-          const total = type==='savings' ? savingsTotalForSlice('day',ref)
-            : type==='expense' ? sum(getAllExpenses('day',ref)) : sum(App.state.transactions.filter(t=>t.type==='income'&&t.date===ds));
-          data.push({label:fmtDate(ds), total, refDate:ds, slicePeriod:'day'});
-        }
-        return { data, title:'Esta semana (por dia)', line:true };
-      }
-      if (period==='year') {
-        const data=[];
-        const y=now.getFullYear();
-        for (let m=0;m<12;m++) {
-          const ref=new Date(y,m,1);
-          const total = type==='savings' ? savingsTotalForSlice('month',ref)
-            : type==='expense' ? sum(getAllExpenses('month',ref)) : sum(App.state.transactions.filter(t=>t.type==='income'&&inPeriod(t.date,'month',ref)));
-          data.push({label:fmtDate(ref.toISOString().slice(0,10)), total, refDate:ref.toISOString().slice(0,10), slicePeriod:'month'});
-        }
-        return { data, title:'Este ano (por mês)', line:false };
-      }
-      const data=[];
-      for (let i=4;i>=0;i--) {
-        const ref=new Date(now.getFullYear(), now.getMonth()-i, 1);
-        const total = type==='savings' ? savingsTotalForSlice('month',ref)
-          : type==='expense' ? sum(getAllExpenses('month',ref)) : sum(App.state.transactions.filter(t=>t.type==='income'&&inPeriod(t.date,'month',ref)));
-        data.push({label:fmtDate(ref.toISOString().slice(0,10)), total, refDate:ref.toISOString().slice(0,10), slicePeriod:'month'});
-      }
-      return { data, title:'Últimos 5 meses', line:false };
     }
 
     const PERIOD_TABS = [['month','Mês'],['week','Semana'],['day','Dia'],['year','Anual']];
@@ -1421,22 +1291,6 @@
       </div>`;
     }
 
-    function periodChartCard(screen, period, type, total) {
-      const {data,title,line}=periodChartData(period,type);
-      const color=type==='expense'?'#0f766e':type==='savings'?'#047857':'#059669';
-      const label=type==='expense'?'Gastos':type==='savings'?'Poupança':'Ganhos';
-      const sel = App.chartSelection?.screen===screen ? App.chartSelection.index : null;
-      return `<div class="card">
-        <div style="display:flex;justify-content:space-between;margin-bottom:4px">
-          <span style="font-size:14px;font-weight:600">${label} — ${title}</span>
-          <span style="font-size:14px;font-weight:700;${type==='income'?'color:#059669':''}">${fmt(total)}</span>
-        </div>
-        <p style="font-size:11px;color:#94a3b8;margin-bottom:10px">Total no período · toca num ponto para ver movimentos</p>
-        ${line?lineChart(data,color,screen,sel):barChart(data,color,screen,sel)}
-        ${chartDrilldownHtml(screen, period, type, data, sel)}
-      </div>`;
-    }
-
     const I18N = {
       pt: {
         login: { subtitle: 'Introduz o utilizador e a palavra-passe para entrar', username: 'Utilizador', password: 'Palavra-passe', submit: 'Entrar', error: 'Utilizador ou palavra-passe incorretos', hint: 'Os teus dados ficam guardados apenas neste dispositivo.' },
@@ -1682,7 +1536,6 @@
       listSearch: { gastos:'', ganhos:'', poupancas:'', historico:'' },
       listCategory: { gastos:'all', ganhos:'all', historico:'all' },
       collapsed: { insights: true, analytics: true },
-      chartSelection: null,
       catColor: '#f97316',
       CAT_COLORS: ['#f97316','#3b82f6','#ef4444','#a855f7','#22c55e','#ec4899','#6366f1','#64748b','#0ea5e9','#14b8a6','#f59e0b','#10b981'],
 
@@ -1916,7 +1769,6 @@
 
       go(name) {
         this.screen=name;
-        if (this.chartSelection?.screen !== name) this.chartSelection = null;
         document.querySelectorAll('.nav button').forEach(b=>b.classList.toggle('active', b.dataset.screen===name));
         this.updateSubtitle();
         this.render();
@@ -1924,17 +1776,7 @@
 
       setFilter(screen, key, val, btn) {
         this.filters[key]=val;
-        this.chartSelection = null;
         if(btn) { btn.parentElement.querySelectorAll('button').forEach(b=>b.classList.remove('active')); btn.classList.add('active'); }
-        this.render();
-      },
-
-      selectChartPoint(screen, index) {
-        if (this.chartSelection?.screen===screen && this.chartSelection?.index===index) {
-          this.chartSelection = null;
-        } else {
-          this.chartSelection = { screen, index };
-        }
         this.render();
       },
 
@@ -1957,8 +1799,7 @@
             ${top.map(({c,total})=>`<div class="tx"><div class="tx-icon" style="background:${c.color}22">${c.icon}</div>
               <div class="tx-info"><div class="name">${esc(c.name)}</div></div><div class="tx-amount">${fmt(total)}</div></div>`).join('')}
           </div>`:'') +
-          `${periodChartCard('resumo',p,'expense',sum(exp))}
-            <div class="card-hint clickable" onclick="App.go('historico')">Ver histórico completo →</div>` +
+          `<div class="card-hint clickable" onclick="App.go('historico')">Ver histórico completo →</div>` +
           monthComparisonHtml();
         return `<section class="screen active">
           <div class="period">
@@ -1975,7 +1816,7 @@
             <div class="card"><div class="lbl">Profissional</div><div class="val">${fmt(sum(prof))}</div></div>
           </div>
           ${collapseHtml('insights','Metas e alertas','Poupança, alertas e objetivos', insights, !this.collapsed.insights)}
-          ${collapseHtml('analytics','Análise','Gráficos e comparação', analytics, !this.collapsed.analytics)}
+          ${collapseHtml('analytics','Análise','Comparação mensal', analytics, !this.collapsed.analytics)}
         </section>`;
       },
 
@@ -2101,7 +1942,6 @@
               <span style="color:#64748b">Total fixo/mês</span><span style="font-weight:600">${fmt(fixedMonth)}</span></div>`:''}
           </div>
           <div class="period">${periodTabsHtml('gastos','gastos',p,LIST_PERIOD_TABS)}</div>
-          ${periodChartCard('gastos',p,'expense',sum(exp))}
           <div class="filter-row">
             ${['all','personal','professional'].map((k,i)=>`<button class="${sc===k?'active':''}" onclick="App.setFilter('gastos','gastosScope','${k}',this)">${['Todos','Pessoal','Profissional'][i]}</button>`).join('')}
           </div>
@@ -2123,7 +1963,6 @@
         const filtered=filterTxList(inc, this.listSearch.ganhos, this.listCategory.ganhos);
         return `<section class="screen active">
           <div class="period">${periodTabsHtml('ganhos','ganhos',p,LIST_PERIOD_TABS)}</div>
-          ${periodChartCard('ganhos',p,'income',sum(inc))}
           ${listFiltersHtml('ganhos', inc)}
           <div class="card" style="display:flex;justify-content:space-between;align-items:center;padding:12px 16px">
             <span style="font-size:13px;color:#64748b">Total de ganhos</span>
@@ -2142,7 +1981,6 @@
         const listBody=this.savingsListBodyHtml(items, this.listSearch.poupancas);
         return `<section class="screen active">
           <div class="period">${periodTabsHtml('poupancas','poupancas',p,LIST_PERIOD_TABS)}</div>
-          ${periodChartCard('poupancas',p,'savings',sum(items))}
           ${savingsCardHtml()}
           ${savingsListFiltersHtml('poupancas')}
           <div class="card" style="display:flex;justify-content:space-between;align-items:center;padding:12px 16px">
@@ -2173,7 +2011,6 @@
         const shown = isSavings
           ? filtered.filter(t=>!q || (t.note||'').toLowerCase().includes(q))
           : filterTxList(filtered, this.listSearch.historico, this.listCategory.historico);
-        const total = isSavings ? sum(filtered) : sum(filtered);
         const emptyMsg = isSavings
           ? '<div class="empty">Sem poupanças registadas.<small>Usa o botão + para registar</small></div>'
           : '<div class="empty">Sem movimentos.<small>Adiciona com o botão +</small></div>';
@@ -2195,7 +2032,6 @@
             <button class="${type==='savings'?'active':''}" onclick="App.setHistType('savings',this)">Poupança</button>
           </div>
           <div class="period">${periodTabsHtml('historico','historico',p,HISTORY_PERIOD_TABS)}</div>
-          ${periodChartCard('historico',p,type,total)}
           ${isSavings ? '' : monthComparisonHtml()}
           ${filtersHtml}
           <div class="card" style="padding:0 16px">
@@ -2205,7 +2041,7 @@
         </section>`;
       },
 
-      setHistType(type, btn) { this.histType=type; this.chartSelection=null; btn.parentElement.querySelectorAll('button').forEach(b=>b.classList.remove('active')); btn.classList.add('active'); this.render(); },
+      setHistType(type, btn) { this.histType=type; btn.parentElement.querySelectorAll('button').forEach(b=>b.classList.remove('active')); btn.classList.add('active'); this.render(); },
 
       renderCalendario() {
         const y=this.calYear, m=this.calMonth;
