@@ -792,16 +792,7 @@
       { id:'other-income', name:'Outros ganhos', icon:'💵', color:'#6ee7b7', scope:'income' },
     ];
 
-    const SEED_VERSION = 12;
-    const SEED_VERSION_EMPTY = 'empty-1';
-    let SAMPLE_DATA = null;
-
-    async function loadSampleData() {
-      if (SAMPLE_DATA) return SAMPLE_DATA;
-      const res = await fetch('sample-data.json');
-      SAMPLE_DATA = await res.json();
-      return SAMPLE_DATA;
-    }
+    const SEED_VERSION_EMPTY = 'empty-2';
 
     function compressImage(file) {
       return new Promise((resolve, reject) => {
@@ -1777,13 +1768,7 @@
       },
 
       migrateLegacyStorage() {
-        if (this.currentUser !== 'venusia') return;
-        const legacy = localStorage.getItem('fincontrol_preview');
-        const key = this.storageKey();
-        if (legacy && !localStorage.getItem(key)) {
-          localStorage.setItem(key, legacy);
-          localStorage.removeItem('fincontrol_preview');
-        }
+        localStorage.removeItem('fincontrol_preview');
       },
 
       updateFaceIdButton() {
@@ -1834,42 +1819,28 @@
       },
 
       usesEmptyProfile() {
-        return this.currentUser === 'santiago';
+        return true;
+      },
+
+      ensureStateFields() {
+        if (!this.state.recurring) { this.state.recurring = []; this.save(); }
+        if (!this.state.savingsGoal) { this.state.savingsGoal = { ...DEFAULT_SAVINGS }; this.save(); }
+        if (!this.state.spendingAlert) { this.state.spendingAlert = { ...DEFAULT_SPENDING_ALERT }; this.save(); }
+        if (!this.state.financialGoals) { this.state.financialGoals = []; this.save(); }
+        if (!this.state.savingsTransfers) { this.state.savingsTransfers = []; this.save(); }
+        if (!this.state.categoryBudgets) { this.state.categoryBudgets = {}; this.save(); }
       },
 
       async bootstrap() {
-        await loadSampleData();
         const saved = localStorage.getItem(this.storageKey());
-        if (this.usesEmptyProfile()) {
-          if (saved) {
-            try {
-              this.state = JSON.parse(saved);
-              if (this.state.seedVersion !== SEED_VERSION_EMPTY) await this.resetToEmpty();
-              else {
-                if (!this.state.recurring) { this.state.recurring = []; this.save(); }
-                if (!this.state.savingsGoal) { this.state.savingsGoal = { ...DEFAULT_SAVINGS }; this.save(); }
-                if (!this.state.spendingAlert) { this.state.spendingAlert = { ...DEFAULT_SPENDING_ALERT }; this.save(); }
-                if (!this.state.financialGoals) { this.state.financialGoals = []; this.save(); }
-                if (!this.state.savingsTransfers) { this.state.savingsTransfers = []; this.save(); }
-                if (!this.state.categoryBudgets) { this.state.categoryBudgets = {}; this.save(); }
-              }
-            } catch (e) { await this.resetToEmpty(); }
-          } else {
-            await this.resetToEmpty();
-          }
-        } else if (saved) {
+        if (saved) {
           try {
             this.state = JSON.parse(saved);
-            if (!this.state.recurring) { this.state.recurring = []; this.save(); }
-            if (!this.state.savingsGoal) { this.state.savingsGoal = { ...DEFAULT_SAVINGS }; this.save(); }
-            if (!this.state.spendingAlert) { this.state.spendingAlert = { ...DEFAULT_SPENDING_ALERT }; this.save(); }
-            if (!this.state.financialGoals) { this.state.financialGoals = []; this.save(); }
-            if (!this.state.savingsTransfers) { this.state.savingsTransfers = []; this.save(); }
-            if (!this.state.categoryBudgets) { this.state.categoryBudgets = {}; this.save(); }
-            if (this.state.seedVersion !== SEED_VERSION) await this.seed();
-          } catch (e) { await this.seed(); }
+            if (this.state.seedVersion !== SEED_VERSION_EMPTY) await this.resetToEmpty();
+            else this.ensureStateFields();
+          } catch (e) { await this.resetToEmpty(); }
         } else {
-          await this.seed();
+          await this.resetToEmpty();
         }
         document.getElementById('f-date').value = isoToDisplay(today());
         this.render();
@@ -1892,7 +1863,7 @@
         this.state.receipts = [];
         this.state.savingsTransfers = [];
         this.state.financialGoals = [];
-        this.state.seedVersion = SEED_VERSION;
+        this.state.seedVersion = SEED_VERSION_EMPTY;
         this.save();
         this.toast('Dados apagados — começa do zero');
       },
@@ -1908,23 +1879,6 @@
           spendingAlert: { ...DEFAULT_SPENDING_ALERT },
           financialGoals: [],
           savingsTransfers: [],
-          categoryBudgets: {},
-        };
-        this.save();
-      },
-
-      async seed() {
-        const data = await loadSampleData();
-        this.state = {
-          seedVersion: SEED_VERSION,
-          transactions: data.transactions.map(t=>({...t})),
-          categories: DEFAULT_CATS.map(c=>({...c})),
-          receipts: [],
-          recurring: data.recurring.map(r=>({...r})),
-          savingsGoal: { ...DEFAULT_SAVINGS },
-          spendingAlert: { ...DEFAULT_SPENDING_ALERT },
-          financialGoals: [],
-          savingsTransfers: data.savingsTransfers.map(t=>({...t})),
           categoryBudgets: {},
         };
         this.save();
