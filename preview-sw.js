@@ -1,4 +1,4 @@
-const CACHE = 'fincontrol-preview-v10';
+const CACHE = 'fincontrol-preview-v16';
 const DATA_CACHE = 'fincontrol-data-v1';
 const BACKUP_CACHE_URL = '/__fincontrol_backup__';
 const ASSETS = ['./mobile-preview.html', './manifest.webmanifest', './sample-data.json', './icon-192.png', './icon-512.png', './apple-touch-icon.png', './favicon.svg'];

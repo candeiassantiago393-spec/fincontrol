@@ -89,6 +89,10 @@
     html.dark-mode .tx-info .name { color: #cccccc !important; }
     html.dark-mode .search-overlay { background: #1f1f1f !important; }
     html.dark-mode .confirm-box { background: #252526 !important; color: #cccccc !important; border: 1px solid #3c3c3c; }
+    html.dark-mode .budget-spent, html.dark-mode .budget-input { background: #2d2d30 !important; border-color: #3c3c3c !important; color: #cccccc !important; }
+    html.dark-mode .budget-spent { color: #4ec9b0 !important; }
+    html.dark-mode .budget-spent.over { color: #f87171 !important; border-color: #7f1d1d !important; background: #3f1d1d !important; }
+    html.dark-mode .budget-spent.warn { color: #fbbf24 !important; border-color: #78350f !important; background: #3f2e12 !important; }
     .btn-search { width: 40px; height: 40px; border: none; border-radius: 12px; background: #f0fdfa; color: #0f766e; cursor: pointer; font-size: 16px; }
     .search-overlay { display: none; position: fixed; inset: 0; z-index: 55; background: rgba(255,255,255,.97); flex-direction: column; }
     .search-overlay.open { display: flex; }
@@ -101,7 +105,13 @@
     .confirm-actions button { flex: 1; padding: 12px; border-radius: 12px; border: none; font-weight: 600; cursor: pointer; }
     .confirm-cancel { background: #f1f5f9; color: #334155; }
     .confirm-ok { background: #0f766e; color: white; }
-    .budget-input { width: 72px; padding: 4px 8px; border: 1px solid #e2e8f0; border-radius: 8px; font-size: 12px; }
+    .budget-row { padding-left: 52px; margin-top: 6px; display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+    .budget-field { display: flex; align-items: center; gap: 6px; }
+    .budget-field label { font-size: 11px; color: #64748b; white-space: nowrap; }
+    .budget-spent, .budget-input { width: 72px; padding: 4px 8px; border: 1px solid #e2e8f0; border-radius: 8px; font-size: 12px; }
+    .budget-spent { display: inline-block; background: #f8fafc; font-weight: 600; color: #0f766e; text-align: right; }
+    .budget-spent.over { color: #dc2626; border-color: #fecaca; background: #fef2f2; }
+    .budget-spent.warn { color: #b45309; border-color: #fde68a; background: #fffbeb; }
     .budget-meta { font-size: 11px; color: #64748b; margin-top: 4px; padding-left: 52px; }
     .budget-meta.over { color: #dc2626; }
     .budget-meta.warn { color: #b45309; }
@@ -154,6 +164,10 @@
     .search-bar { display: flex; gap: 8px; margin-bottom: 12px; }
     .search-bar input { flex: 1; padding: 10px 14px; border: 1px solid #e2e8f0; border-radius: 12px; font-size: 14px; font-family: inherit; background: white; }
     .search-bar select { padding: 10px 12px; border: 1px solid #e2e8f0; border-radius: 12px; font-size: 13px; background: white; max-width: 42%; }
+    .savings-filters { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 12px; }
+    .savings-filters .full { grid-column: 1 / -1; }
+    .savings-filters label { font-size: 11px; color: #64748b; display: block; margin-bottom: 4px; }
+    .savings-filters input { width: 100%; padding: 10px 12px; border: 1px solid #e2e8f0; border-radius: 12px; font-size: 14px; font-family: inherit; background: white; box-sizing: border-box; }
     .collapse { margin-bottom: 12px; }
     .collapse-head { display: flex; justify-content: space-between; align-items: center; padding: 14px 16px; background: white; border: 1px solid #f1f5f9; border-radius: 16px; cursor: pointer; user-select: none; box-shadow: 0 1px 3px rgba(15,23,42,.04); }
     .collapse-head .title { font-size: 14px; font-weight: 600; }
@@ -273,6 +287,14 @@
     .detail-savings .lbl { font-size: 12px; font-weight: 500; color: #047857; display: flex; align-items: center; gap: 6px; }
     .detail-savings .amount { font-size: 24px; font-weight: 700; color: #065f46; margin-top: 6px; }
     .detail-savings .hint { font-size: 11px; color: #059669; margin-top: 4px; }
+    .detail-savings-btn { width: 100%; margin-top: 12px; padding: 12px; border: none; border-radius: 12px; background: #0f766e; color: white; font-size: 14px; font-weight: 600; cursor: pointer; }
+    .detail-savings-btn:active { opacity: .9; }
+    .form-savings-suggest { margin: -4px 0 12px; }
+    .form-savings-card { background: linear-gradient(135deg, #ecfdf5, #f0fdfa); border: 1px solid #a7f3d0; border-radius: 12px; padding: 12px 14px; }
+    .form-savings-card .lbl { font-size: 12px; font-weight: 500; color: #047857; margin-bottom: 8px; }
+    .form-savings-row { display: flex; align-items: center; gap: 8px; }
+    .form-savings-row input { flex: 1; padding: 10px 12px; border: 1px solid #a7f3d0; border-radius: 10px; font-size: 16px; font-weight: 600; color: #065f46; background: white; }
+    .form-savings-card .hint { font-size: 11px; color: #059669; margin-top: 6px; }
     .detail-receipt { margin-bottom: 16px; }
     .detail-receipt .lbl { font-size: 13px; font-weight: 500; color: #64748b; margin-bottom: 8px; }
     .detail-receipt img { width: 100%; max-height: 200px; object-fit: cover; border-radius: 12px; border: 1px solid #e2e8f0; cursor: pointer; }
@@ -472,7 +494,18 @@
         <form id="tx-form" onsubmit="App.submitForm(event)">
           <div class="field">
             <label>Valor (€)</label>
-            <input type="text" inputmode="decimal" id="f-amount" placeholder="0,00" required />
+            <input type="text" inputmode="decimal" id="f-amount" placeholder="0,00" required oninput="App.updateFormSavingsSuggest()" />
+          </div>
+          <div class="form-savings-suggest" id="f-savings-suggest" hidden>
+            <div class="form-savings-card">
+              <div class="lbl" id="f-savings-lbl">🐷 Poupança sugerida</div>
+              <div class="form-savings-row">
+                <input type="text" inputmode="decimal" id="f-savings-amount" placeholder="0,00" />
+                <span style="font-size:13px;color:#047857;font-weight:500">€</span>
+              </div>
+              <div class="hint" id="f-savings-hint"></div>
+            </div>
+            <button type="button" class="detail-savings-btn" onclick="App.saveSavingsFromForm()">Guardar poupança neste dia</button>
           </div>
           <div class="field">
             <label>Data</label>
@@ -640,17 +673,28 @@
   <div class="overlay center" id="transfer-overlay" onclick="if(event.target===this)App.closeSavingsTransfer()">
     <div class="sheet">
       <div class="sheet-header">
-        <h2>Registar transferência</h2>
+        <h2 id="transfer-form-title">Registar poupança</h2>
         <button class="sheet-close" onclick="App.closeSavingsTransfer()">×</button>
       </div>
       <div class="sheet-body">
         <form onsubmit="App.saveSavingsTransfer(event)">
           <div class="field"><label>Valor (€)</label><input type="text" inputmode="decimal" id="st-amount" placeholder="0,00" required /></div>
           <div class="field"><label>Data</label><input type="text" id="st-date" required placeholder="dd/mm/aaaa" maxlength="10" inputmode="numeric" autocomplete="off" oninput="App.maskDateInput(this)" /></div>
-          <div class="field"><label>Nota</label><input type="text" id="st-note" placeholder="Ex: Transferência para conta poupança" /></div>
-          <button type="submit" class="btn-primary">Guardar</button>
+          <div class="field"><label>Onde guardaste?</label><input type="text" id="st-location" placeholder="Ex: Conta poupança BPI, cofre, carteira..." /></div>
+          <div class="field"><label>Nota</label><input type="text" id="st-note" placeholder="Ex: Poupança do salário" /></div>
+          <button type="submit" class="btn-primary" id="transfer-submit-btn">Guardar</button>
         </form>
       </div>
+    </div>
+  </div>
+
+  <div class="overlay" id="savings-detail-overlay" onclick="if(event.target===this)App.closeSavingsDetail()">
+    <div class="sheet">
+      <div class="sheet-header">
+        <h2>Detalhe da poupança</h2>
+        <button class="sheet-close" onclick="App.closeSavingsDetail()">×</button>
+      </div>
+      <div class="sheet-body" id="savings-detail-body"></div>
     </div>
   </div>
 
@@ -927,12 +971,40 @@
       });
     }
 
+    function applySavingsFilters(items, screen) {
+      const q = (App.listSearch[screen] || '').trim().toLowerCase();
+      const month = App.listSavingsMonth[screen] || '';
+      const dateDisplay = App.listSavingsDate[screen] || '';
+      const dateIso = dateDisplay.length === 10 ? displayToIso(dateDisplay) : null;
+      return items.filter(t => {
+        if (dateIso && t.date !== dateIso) return false;
+        if (!dateIso && month && !t.date.startsWith(month)) return false;
+        if (!q) return true;
+        return (t.note || '').toLowerCase().includes(q) || (t.location || '').toLowerCase().includes(q);
+      });
+    }
+
     function savingsListFiltersHtml(screen) {
       const q = App.listSearch[screen] || '';
-      return `<div class="search-bar" id="search-bar-${screen}">
-        <input type="search" id="search-input-${screen}" class="search-input" style="flex:1;max-width:100%"
-          placeholder="Pesquisar na nota..." value="${esc(q)}"
-          oninput="App.setListSearch('${screen}', this.value)" />
+      const month = App.listSavingsMonth[screen] || '';
+      const date = App.listSavingsDate[screen] || '';
+      return `<div class="savings-filters" id="search-bar-${screen}">
+        <div>
+          <label for="savings-month-${screen}">Mês</label>
+          <input type="month" id="savings-month-${screen}" value="${esc(month)}"
+            onchange="App.setSavingsMonthFilter('${screen}', this.value)" />
+        </div>
+        <div>
+          <label for="savings-date-${screen}">Data</label>
+          <input type="text" id="savings-date-${screen}" placeholder="dd/mm/aaaa" maxlength="10" inputmode="numeric"
+            autocomplete="off" value="${esc(date)}"
+            oninput="App.maskDateInput(this);App.setSavingsDateFilter('${screen}', this.value)" />
+        </div>
+        <div class="full">
+          <label for="search-input-${screen}">Pesquisar</label>
+          <input type="search" id="search-input-${screen}" placeholder="Nota ou local..."
+            value="${esc(q)}" oninput="App.setListSearch('${screen}', this.value)" />
+        </div>
       </div>`;
     }
 
@@ -1005,40 +1077,44 @@
       return `${y}-${String(m+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
     }
 
-    function recurringStartsOn(r) {
+    function recurringStartMonth(r) {
       const raw = r.createdAt || r.activeFrom;
-      return raw ? String(raw).slice(0, 10) : today();
+      const ds = raw ? String(raw).slice(0, 10) : today();
+      return ds.slice(0, 7);
     }
 
-    function shouldCountRecurringOn(r, chargeDateStr) {
-      return chargeDateStr >= recurringStartsOn(r);
+    function shouldCountRecurringOn(r, chargeDateStr, ref = new Date()) {
+      const chargeMonth = chargeDateStr.slice(0, 7);
+      if (chargeMonth < recurringStartMonth(r)) return false;
+      const refMonth = `${ref.getFullYear()}-${String(ref.getMonth() + 1).padStart(2, '0')}`;
+      return chargeMonth <= refMonth;
     }
 
-    function pushRecurringCharge(result, r, ds) {
-      if (!shouldCountRecurringOn(r, ds)) return;
+    function pushRecurringCharge(result, r, ds, ref) {
+      if (!shouldCountRecurringOn(r, ds, ref)) return;
       result.push({ id:`rec-${r.id}-${ds}`, type:'expense', amount:r.amount, categoryId:r.categoryId,
         description:r.name, location:r.location, date:ds, scope:r.scope, isRecurring:true, recurringId:r.id });
     }
 
     function expandRecurring(period, ref=new Date()) {
-      const items = (App.state.recurring||[]).filter(r=>r.active);
+      const items = (App.state.recurring||[]).filter(r => r.active !== false);
       const result = [];
       const {s,e} = periodRange(period, ref);
       items.forEach(r => {
         if (period==='month') {
           const ds = chargeDate(s.getFullYear(), s.getMonth(), r.dayOfMonth);
-          pushRecurringCharge(result, r, ds);
+          pushRecurringCharge(result, r, ds, ref);
         } else if (period==='year') {
           for (let m = 0; m < 12; m++) {
             const ds = chargeDate(s.getFullYear(), m, r.dayOfMonth);
-            pushRecurringCharge(result, r, ds);
+            pushRecurringCharge(result, r, ds, ref);
           }
         } else {
           const cur = new Date(s);
           while (cur <= e) {
             const ds = chargeDate(cur.getFullYear(), cur.getMonth(), r.dayOfMonth);
             if (ds === cur.toISOString().slice(0,10)) {
-              pushRecurringCharge(result, r, ds);
+              pushRecurringCharge(result, r, ds, ref);
             }
             cur.setDate(cur.getDate()+1);
           }
@@ -1082,18 +1158,17 @@
       return (App.state.savingsTransfers||[]).filter(t=>inPeriod(t.date, period, ref));
     }
 
-    function filterSavingsList(items, query) {
-      const q = (query || '').trim().toLowerCase();
-      if (!q) return items;
-      return items.filter(t => (t.note || '').toLowerCase().includes(q));
+    function filterSavingsList(items, screen) {
+      return applySavingsFilters(items, screen || 'poupancas');
     }
 
     function savingsRow(t) {
-      return `<div class="tx">
+      const sub = [fmtDate(t.date), t.location, t.note].filter(Boolean).map((x, i) => i === 0 ? x : esc(x)).join(' · ');
+      return `<div class="tx clickable" onclick="App.openSavingsDetail('${t.id}')">
         <div class="tx-icon" style="background:#d1fae5">🐷</div>
         <div class="tx-info">
           <div class="name" style="color:#047857">${fmt(t.amount)}</div>
-          <div class="sub">${fmtDate(t.date)}${t.note?' · '+esc(t.note):''}</div>
+          <div class="sub">${sub}</div>
         </div>
         <button class="btn-del" onclick="event.stopPropagation();App.deleteSavingsTransfer('${t.id}')" title="Eliminar">×</button>
       </div>`;
@@ -1614,12 +1689,16 @@
       calSelected: today(),
       viewerReceiptId: null,
       detailTxId: null,
+      detailSavingsId: null,
+      editingSavingsId: null,
       editingCatId: null,
       editingRecurringId: null,
       recurringScope: 'personal',
       pendingReceiptId: null,
       editingTxId: null,
       listSearch: { gastos:'', ganhos:'', poupancas:'', historico:'' },
+      listSavingsMonth: { poupancas:'', historico:'' },
+      listSavingsDate: { poupancas:'', historico:'' },
       listCategory: { gastos:'all', ganhos:'all', historico:'all' },
       collapsed: { insights: true, analytics: true },
       catColor: '#f97316',
@@ -1964,8 +2043,15 @@
           : emptyHtml;
       },
 
-      savingsListBodyHtml(items, query) {
-        const shown = filterSavingsList(items, query);
+      getPoupancasItems() {
+        const p = this.filters.poupancas;
+        const items = filterSavings(p).sort((a, b) =>
+          b.date.localeCompare(a.date) || (b.createdAt || '').localeCompare(a.createdAt || ''));
+        return applySavingsFilters(items, 'poupancas');
+      },
+
+      savingsListBodyHtml(items, screen) {
+        const shown = filterSavingsList(items, screen);
         const empty = '<div class="empty">Sem poupanças neste período.<small>Usa o botão + para registar</small></div>';
         return shown.length ? shown.map(t => savingsRow(t)).join('') : empty;
       },
@@ -1982,10 +2068,11 @@
           return;
         }
         if (screen === 'poupancas') {
-          const p = this.filters.poupancas;
-          const items = filterSavings(p).sort((a, b) =>
-            b.date.localeCompare(a.date) || (b.createdAt || '').localeCompare(a.createdAt || ''));
-          body.innerHTML = this.savingsListBodyHtml(items, this.listSearch.poupancas);
+          const shown = this.getPoupancasItems();
+          const empty = '<div class="empty">Sem poupanças neste período.<small>Usa o botão + para registar</small></div>';
+          body.innerHTML = shown.length ? shown.map(t => savingsRow(t)).join('') : empty;
+          const totalEl = document.getElementById('poupancas-total');
+          if (totalEl) totalEl.textContent = fmt(sum(shown));
           return;
         }
         if (screen === 'historico' && this.histType === 'savings') {
@@ -2008,6 +2095,16 @@
 
       setListSearch(screen, val) {
         this.listSearch[screen] = val;
+        this.refreshTxList();
+      },
+
+      setSavingsMonthFilter(screen, val) {
+        this.listSavingsMonth[screen] = val || '';
+        this.refreshTxList();
+      },
+
+      setSavingsDateFilter(screen, val) {
+        this.listSavingsDate[screen] = val || '';
         this.refreshTxList();
       },
 
@@ -2042,7 +2139,7 @@
           <div class="card" style="padding:0 16px">
             <div style="display:flex;justify-content:space-between;align-items:center;padding:12px 0;border-bottom:1px solid #f1f5f9">
               <div><div style="font-size:14px;font-weight:600">Gastos fixos mensais</div>
-                <div style="font-size:11px;color:#94a3b8">Contam a partir do dia em que crias — não em meses anteriores</div></div>
+                <div style="font-size:11px;color:#94a3b8">Contam só a partir do mês em que crias — não em meses anteriores</div></div>
               <button onclick="App.openRecurringForm()" style="border:none;background:none;color:#0f766e;font-size:13px;font-weight:500;cursor:pointer">+ Novo</button>
             </div>
             ${recList || '<div class="empty" style="padding:20px">Sem gastos fixos</div>'}
@@ -2085,15 +2182,16 @@
       renderPoupancas() {
         if (this.filters.poupancas!=='month' && this.filters.poupancas!=='year') this.filters.poupancas='month';
         const p=this.filters.poupancas;
-        const items=filterSavings(p).sort((a,b)=>b.date.localeCompare(a.date)||(b.createdAt||'').localeCompare(a.createdAt||''));
-        const listBody=this.savingsListBodyHtml(items, this.listSearch.poupancas);
+        const allItems=filterSavings(p).sort((a,b)=>b.date.localeCompare(a.date)||(b.createdAt||'').localeCompare(a.createdAt||''));
+        const listBody=this.savingsListBodyHtml(allItems, 'poupancas');
+        const shown=this.getPoupancasItems();
         return `<section class="screen active">
           <div class="period">${periodTabsHtml('poupancas','poupancas',p,LIST_PERIOD_TABS)}</div>
           ${savingsCardHtml()}
           ${savingsListFiltersHtml('poupancas')}
           <div class="card" style="display:flex;justify-content:space-between;align-items:center;padding:12px 16px">
             <span style="font-size:13px;color:#64748b">Total poupado</span>
-            <span style="font-size:20px;font-weight:700;color:#047857">${fmt(sum(items))}</span>
+            <span id="poupancas-total" style="font-size:20px;font-weight:700;color:#047857">${fmt(sum(shown))}</span>
           </div>
           <div class="card" style="padding:0 16px">
             <div style="font-size:14px;font-weight:600;padding:12px 0;border-bottom:1px solid #f1f5f9">Histórico</div>
@@ -2117,7 +2215,7 @@
         filtered.sort((a,b)=>b.date.localeCompare(a.date));
         const q = (this.listSearch.historico||'').trim().toLowerCase();
         const shown = isSavings
-          ? filtered.filter(t=>!q || (t.note||'').toLowerCase().includes(q))
+          ? filtered.filter(t=>!q || (t.note||'').toLowerCase().includes(q) || (t.location||'').toLowerCase().includes(q))
           : filterTxList(filtered, this.listSearch.historico, this.listCategory.historico);
         const emptyMsg = isSavings
           ? '<div class="empty">Sem poupanças registadas.<small>Usa o botão + para registar</small></div>'
@@ -2128,7 +2226,7 @@
         const filtersHtml = isSavings
           ? `<div class="card" style="padding:12px 16px">
               <label style="font-size:12px;color:#64748b;display:block;margin-bottom:6px">Pesquisar nota</label>
-              <input type="search" placeholder="Pesquisar na nota..." value="${esc(this.listSearch.historico||'')}"
+              <input type="search" placeholder="Pesquisar nota ou local..." value="${esc(this.listSearch.historico||'')}"
                 oninput="App.setListSearch('historico', this.value)" style="width:100%;padding:10px 12px;border:1px solid #e2e8f0;border-radius:12px;font-size:14px" />
             </div>`
           : listFiltersHtml('historico', filtered);
@@ -2230,10 +2328,16 @@
                       <button class="btn-icon del" onclick="App.deleteCategory('${c.id}')" title="Eliminar">×</button>
                     </div>
                   </div>
-                  ${g.budget ? `<div style="padding-left:52px;margin-top:6px;display:flex;align-items:center;gap:8px">
-                    <label style="font-size:11px;color:#64748b">Orçamento/mês €</label>
-                    <input class="budget-input" type="number" min="0" value="${limit||''}" placeholder="—" onchange="App.setCategoryBudget('${c.id}', this.value)" />
-                  </div>${limit>0?`<div class="budget-meta ${metaCls}">${fmt(spent)} gasto · ${pct}%${spent>=limit?' · Orçamento ultrapassado':''}</div>`:''}` : ''}
+                  ${g.budget ? `<div class="budget-row">
+                    <div class="budget-field">
+                      <label>Gasto/mês €</label>
+                      <span class="budget-spent ${metaCls}">${fmt(spent)}</span>
+                    </div>
+                    <div class="budget-field">
+                      <label>Orçamento/mês €</label>
+                      <input class="budget-input" type="number" min="0" value="${limit||''}" placeholder="—" onchange="App.setCategoryBudget('${c.id}', this.value)" />
+                    </div>
+                  </div>${limit>0?`<div class="budget-meta ${metaCls}">${pct}% do orçamento${spent>=limit?' · Orçamento ultrapassado':''}</div>`:''}` : ''}
                 </div>`;}).join('')}
             `).join('')}
           </div>
@@ -2294,13 +2398,57 @@
         }
 
         this.fillFormCategories(type, editing?.categoryId);
+        this.updateFormSavingsSuggest();
         document.getElementById('form-overlay').classList.add('open');
+      },
+
+      updateFormSavingsSuggest() {
+        const box = document.getElementById('f-savings-suggest');
+        if (!box) return;
+        if (this.formType !== 'income') {
+          box.hidden = true;
+          return;
+        }
+        const amount = parseFloat(document.getElementById('f-amount').value.replace(',', '.')) || 0;
+        if (amount <= 0) {
+          box.hidden = true;
+          return;
+        }
+        const sg = this.state.savingsGoal || DEFAULT_SAVINGS;
+        const saveAmt = Math.round(amount * sg.percent) / 100;
+        document.getElementById('f-savings-lbl').textContent = `🐷 Poupança sugerida (${sg.percent}%)`;
+        document.getElementById('f-savings-amount').value = String(saveAmt).replace('.', ',');
+        document.getElementById('f-savings-hint').textContent = `Guardar deste ganho (${fmt(amount)})`;
+        box.hidden = false;
+      },
+
+      saveSavingsFromForm() {
+        if (this.formType !== 'income') return;
+        const amount = parseFloat(document.getElementById('f-savings-amount').value.replace(',', '.'));
+        if (!amount || amount <= 0) { this.toast('Introduz um valor de poupança'); return; }
+        const dateIso = this.getDateInputIso('f-date');
+        if (!dateIso) { this.toast('Data inválida — usa dd/mm/aaaa'); return; }
+        const catId = document.getElementById('f-category').value;
+        const c = cat(catId);
+        const label = c?.name || 'Ganho';
+        if (!this.state.savingsTransfers) this.state.savingsTransfers = [];
+        this.state.savingsTransfers.unshift({
+          id: uid(), amount,
+          date: dateIso,
+          note: `Poupança — ${label}`,
+          createdAt: new Date().toISOString(),
+        });
+        this.save();
+        this.toast('Poupança guardada');
+        this.render();
       },
 
       closeForm() {
         document.getElementById('form-overlay').classList.remove('open');
         this.editingTxId = null;
         this.setNoReceipt();
+        const box = document.getElementById('f-savings-suggest');
+        if (box) box.hidden = true;
       },
 
       updateReceiptButtons(mode) {
@@ -2378,7 +2526,7 @@
           const m = id.match(/^rec-(.+)-(\d{4}-\d{2}-\d{2})$/);
           if (m) {
             const r = this.state.recurring.find(x => x.id === m[1]);
-            if (r) {
+            if (r && shouldCountRecurringOn(r, m[2])) {
               t = { id, type:'expense', amount:r.amount, categoryId:r.categoryId, description:r.name,
                 location:r.location, date:m[2], scope:r.scope, isRecurring:true, recurringId:r.id };
             }
@@ -2419,6 +2567,7 @@
             <div class="lbl">🐷 Poupança recomendada (${sg.percent}%)</div>
             <div class="amount">${fmt(saveAmt)}</div>
             <div class="hint">Guardar deste ganho (${fmt(t.amount)})</div>
+            <button type="button" class="detail-savings-btn" onclick="App.saveSavingsFromDetail()">Guardar poupança deste ganho</button>
           </div>`;
         }
 
@@ -2728,17 +2877,83 @@
         input.value = '';
       },
 
-      openSavingsTransfer(dateIso) {
+      openSavingsTransfer(dateIso, amount, note, location, editId) {
         document.getElementById('fab-menu').classList.remove('open');
         document.getElementById('fab').classList.remove('open');
-        document.getElementById('st-date').value = isoToDisplay(dateIso || today());
-        document.getElementById('st-amount').value = '';
-        document.getElementById('st-note').value = '';
+        this.editingSavingsId = editId || null;
+        const editing = editId
+          ? (this.state.savingsTransfers || []).find(t => t.id === editId)
+          : null;
+        document.getElementById('transfer-form-title').textContent = editing ? 'Editar poupança' : 'Registar poupança';
+        document.getElementById('transfer-submit-btn').textContent = editing ? 'Guardar alterações' : 'Guardar';
+        document.getElementById('st-date').value = isoToDisplay(editing?.date || dateIso || today());
+        const amt = editing?.amount ?? amount;
+        document.getElementById('st-amount').value = amt > 0 ? String(amt).replace('.', ',') : '';
+        document.getElementById('st-location').value = editing?.location || location || '';
+        document.getElementById('st-note').value = editing?.note || note || '';
         document.getElementById('transfer-overlay').classList.add('open');
+      },
+
+      openSavingsDetail(id) {
+        const t = (this.state.savingsTransfers || []).find(x => x.id === id);
+        if (!t) return;
+        this.detailSavingsId = id;
+        const html = `<div class="detail-hero">
+          <div class="icon" style="background:#d1fae5">🐷</div>
+          <div class="info">
+            <div class="name">Poupança</div>
+            <div class="cat">${t.location ? esc(t.location) : 'Sem local definido'}</div>
+          </div>
+          <div class="amount income">${fmt(t.amount)}</div>
+        </div>
+        <div class="detail-grid">
+          <div class="detail-field"><div class="lbl">Data</div><div class="val">${fmtDateLong(t.date)}</div></div>
+          <div class="detail-field"><div class="lbl">Onde</div><div class="val">${t.location ? esc(t.location) : '—'}</div></div>
+        </div>
+        ${t.note ? `<div class="detail-note"><div class="lbl">Nota</div><div class="val">${esc(t.note)}</div></div>` : ''}
+        <button type="button" class="btn-edit" onclick="App.editSavingsFromDetail()">Editar poupança</button>
+        <button type="button" class="btn-danger" onclick="App.deleteSavingsFromDetail()">Eliminar poupança</button>`;
+        document.getElementById('savings-detail-body').innerHTML = html;
+        document.getElementById('savings-detail-overlay').classList.add('open');
+      },
+
+      closeSavingsDetail() {
+        document.getElementById('savings-detail-overlay').classList.remove('open');
+        this.detailSavingsId = null;
+      },
+
+      editSavingsFromDetail() {
+        if (!this.detailSavingsId) return;
+        const id = this.detailSavingsId;
+        this.closeSavingsDetail();
+        this.openSavingsTransfer(null, 0, '', '', id);
+      },
+
+      async deleteSavingsFromDetail() {
+        if (!this.detailSavingsId || !(await this.confirm('Eliminar esta poupança?'))) return;
+        const id = this.detailSavingsId;
+        this.closeSavingsDetail();
+        this.state.savingsTransfers = (this.state.savingsTransfers || []).filter(t => t.id !== id);
+        this.save();
+        this.toast('Poupança eliminada');
+        this.render();
+      },
+
+      saveSavingsFromDetail() {
+        if (!this.detailTxId) return;
+        const t = this.findTx(this.detailTxId);
+        if (!t || t.type !== 'income') return;
+        const sg = this.state.savingsGoal || DEFAULT_SAVINGS;
+        const saveAmt = Math.round(t.amount * sg.percent) / 100;
+        const c = cat(t.categoryId);
+        const label = t.description || c?.name || 'Ganho';
+        this.closeTxDetail();
+        this.openSavingsTransfer(t.date, saveAmt, `Poupança — ${label}`);
       },
 
       closeSavingsTransfer() {
         document.getElementById('transfer-overlay').classList.remove('open');
+        this.editingSavingsId = null;
       },
 
       saveSavingsTransfer(e) {
@@ -2748,15 +2963,27 @@
         const dateIso = this.getDateInputIso('st-date');
         if (!dateIso) { this.toast('Data inválida — usa dd/mm/aaaa'); return; }
         if (!this.state.savingsTransfers) this.state.savingsTransfers = [];
-        this.state.savingsTransfers.unshift({
-          id: uid(), amount,
+        const existing = this.editingSavingsId
+          ? this.state.savingsTransfers.find(t => t.id === this.editingSavingsId)
+          : null;
+        const item = {
+          id: this.editingSavingsId || uid(),
+          amount,
           date: dateIso,
+          location: document.getElementById('st-location').value.trim() || undefined,
           note: document.getElementById('st-note').value.trim() || undefined,
-          createdAt: new Date().toISOString(),
-        });
+          createdAt: existing?.createdAt || new Date().toISOString(),
+        };
+        if (this.editingSavingsId) {
+          const idx = this.state.savingsTransfers.findIndex(t => t.id === this.editingSavingsId);
+          if (idx >= 0) this.state.savingsTransfers[idx] = item;
+          else this.state.savingsTransfers.unshift(item);
+        } else {
+          this.state.savingsTransfers.unshift(item);
+        }
         this.save();
         this.closeSavingsTransfer();
-        this.toast('Transferência registada');
+        this.toast(this.editingSavingsId ? 'Poupança atualizada' : 'Poupança registada');
         this.render();
       },
 
