@@ -475,18 +475,6 @@
             <input type="text" inputmode="decimal" id="f-amount" placeholder="0,00" required />
           </div>
           <div class="field">
-            <label>Categoria</label>
-            <select id="f-category"></select>
-          </div>
-          <div class="field">
-            <label>Descrição</label>
-            <input type="text" id="f-desc" placeholder="Ex: Almoço, Salário..." />
-          </div>
-          <div class="field" id="f-location-wrap">
-            <label>Local</label>
-            <input type="text" id="f-location" placeholder="Ex: Continente, BP..." />
-          </div>
-          <div class="field">
             <label>Data</label>
             <input type="text" id="f-date" required placeholder="dd/mm/aaaa" maxlength="10" inputmode="numeric" autocomplete="off" oninput="App.maskDateInput(this)" />
           </div>
@@ -502,7 +490,7 @@
             <textarea id="f-note" rows="3" placeholder="Observações, detalhes extra..."></textarea>
           </div>
           <div class="field" id="f-receipt-wrap">
-            <label>Fatura (opcional)</label>
+            <label>Fatura</label>
             <div class="receipt-actions">
               <label class="receipt-btn" id="btn-receipt-camera">
                 📷 Tirar foto
@@ -653,17 +641,9 @@
       </div>
       <div class="sheet-body">
         <form onsubmit="App.saveSavingsTransfer(event)">
-          <div class="field">
-            <label>Calcular com base em</label>
-            <div class="type-toggle" id="st-mode-toggle">
-              <button type="button" data-mode="day" onclick="App.setTransferSummaryMode('day',this)">Dia</button>
-              <button type="button" data-mode="month" class="active" onclick="App.setTransferSummaryMode('month',this)">Mês</button>
-            </div>
-          </div>
-          <div class="field"><label id="st-date-label">Data (define o mês)</label><input type="text" id="st-date" required placeholder="dd/mm/aaaa" maxlength="10" inputmode="numeric" autocomplete="off" oninput="App.maskDateInput(this);App.updateTransferPreview()" /></div>
-          <div class="savings-preview" id="st-preview"></div>
           <div class="field"><label>Valor (€)</label><input type="text" inputmode="decimal" id="st-amount" placeholder="0,00" required /></div>
-          <div class="field"><label>Nota (opcional)</label><input type="text" id="st-note" placeholder="Ex: Transferência para conta poupança" /></div>
+          <div class="field"><label>Data</label><input type="text" id="st-date" required placeholder="dd/mm/aaaa" maxlength="10" inputmode="numeric" autocomplete="off" oninput="App.maskDateInput(this)" /></div>
+          <div class="field"><label>Nota</label><input type="text" id="st-note" placeholder="Ex: Transferência para conta poupança" /></div>
           <button type="submit" class="btn-primary">Guardar</button>
         </form>
       </div>
@@ -800,6 +780,92 @@
     ];
 
     const SEED_VERSION_EMPTY = 'empty-2';
+    const BACKUP_IDB = 'fincontrol_persistent_v1';
+    const BACKUP_CACHE = 'fincontrol-data-v1';
+    const BACKUP_CACHE_URL = '/__fincontrol_backup__';
+
+    function collectAllLocalData() {
+      const data = {};
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        if (key && key.startsWith('fincontrol_')) data[key] = localStorage.getItem(key);
+      }
+      return data;
+    }
+
+    function openBackupDB() {
+      return new Promise((resolve, reject) => {
+        const req = indexedDB.open(BACKUP_IDB, 1);
+        req.onupgradeneeded = () => req.result.createObjectStore('kv');
+        req.onsuccess = () => resolve(req.result);
+        req.onerror = () => reject(req.error);
+      });
+    }
+
+    async function writeBackupIDB(payload) {
+      const db = await openBackupDB();
+      await new Promise((resolve, reject) => {
+        const tx = db.transaction('kv', 'readwrite');
+        tx.objectStore('kv').put(payload, 'all');
+        tx.oncomplete = () => resolve();
+        tx.onerror = () => reject(tx.error);
+      });
+      db.close();
+    }
+
+    async function readBackupIDB() {
+      const db = await openBackupDB();
+      const data = await new Promise((resolve, reject) => {
+        const tx = db.transaction('kv', 'readonly');
+        const req = tx.objectStore('kv').get('all');
+        req.onsuccess = () => resolve(req.result || null);
+        req.onerror = () => reject(req.error);
+      });
+      db.close();
+      return data;
+    }
+
+    async function writeBackupCache(payload) {
+      if (!('caches' in window)) return;
+      const cache = await caches.open(BACKUP_CACHE);
+      await cache.put(BACKUP_CACHE_URL, new Response(JSON.stringify(payload), { headers: { 'Content-Type': 'application/json' } }));
+    }
+
+    async function readBackupCache() {
+      if (!('caches' in window)) return null;
+      const cache = await caches.open(BACKUP_CACHE);
+      const res = await cache.match(BACKUP_CACHE_URL);
+      return res ? JSON.parse(await res.text()) : null;
+    }
+
+    async function persistAllData() {
+      const payload = collectAllLocalData();
+      if (!Object.keys(payload).length) return;
+      try { await writeBackupIDB(payload); } catch (_) {}
+      try { await writeBackupCache(payload); } catch (_) {}
+      try {
+        navigator.serviceWorker?.controller?.postMessage({ type: 'SAVE_BACKUP', payload });
+      } catch (_) {}
+    }
+
+    async function restorePersistentData() {
+      const hasProfiles = Object.keys(localStorage).some((k) => k.startsWith('fincontrol_preview_'));
+      if (hasProfiles) return;
+      let backup = null;
+      try { backup = await readBackupIDB(); } catch (_) {}
+      if (!backup) {
+        try { backup = await readBackupCache(); } catch (_) {}
+      }
+      if (!backup || typeof backup !== 'object') return;
+      Object.entries(backup).forEach(([key, value]) => {
+        if (typeof value === 'string') localStorage.setItem(key, value);
+      });
+    }
+
+    function defaultCategoryId(type, scope) {
+      if (type === 'income') return 'other-income';
+      return scope === 'professional' ? 'work-other' : 'other-personal';
+    }
 
     function compressImage(file) {
       return new Promise((resolve, reject) => {
@@ -1297,14 +1363,14 @@
         nav: { summary: 'Resumo', expenses: 'Gastos', income: 'Ganhos', savings: 'Poupanças', calendar: 'Calendário', categories: 'Categorias', receipts: 'Faturas' },
         subtitles: { summary: 'Resumo financeiro', expenses: 'Os teus gastos', income: 'Os teus ganhos', savings: 'As tuas poupanças', calendar: 'Calendário', categories: 'Categorias', history: 'Histórico' },
         fab: { newIncome: 'Novo Ganho', newExpense: 'Novo Gasto', quickReceipt: 'Foto rápida', registerSavings: 'Nova Poupança' },
-        settings: { title: 'Definições e acessibilidade', profile: 'Perfil', activeProfile: 'Perfil ativo', switchUser: 'Trocar utilizador', switchUserHint: 'Vais voltar ao ecrã de entrada para introduzires utilizador e palavra-passe.', language: 'Idioma', langPt: 'Português', langEn: 'English', visual: 'Visual e leitura', textSize: 'Tamanho do texto', textNormal: 'Normal', textLarge: 'Grande', textXLarge: 'Muito grande', highContrast: 'Alto contraste', reduceMotion: 'Menos animações', darkMode: 'Modo escuro', data: 'Dados e privacidade', exportData: 'Exportar cópia (JSON)', importData: 'Importar cópia (JSON)', importConfirm: 'Isto substitui todos os dados desta conta. Continuar?', importError: 'Ficheiro inválido.', importDone: 'Dados importados', exportMonthlySummary: 'Exportar resumo mensal', exportMonthlySummaryHint: 'Ficheiro de texto com saldo, categorias e movimentos do mês.', openReceipts: 'Álbum de faturas', privacyNote: 'Os dados ficam apenas neste dispositivo.', about: 'Sobre', version: 'Versão 1.0', localFirst: 'App de finanças pessoais, local no dispositivo', exportDone: 'Cópia exportada', exportMonthlyDone: 'Resumo mensal exportado' },
+        settings: { title: 'Definições e acessibilidade', profile: 'Perfil', activeProfile: 'Perfil ativo', switchUser: 'Trocar utilizador', switchUserHint: 'Vais voltar ao ecrã de entrada para introduzires utilizador e palavra-passe.', language: 'Idioma', langPt: 'Português', langEn: 'English', visual: 'Visual e leitura', textSize: 'Tamanho do texto', textNormal: 'Normal', textLarge: 'Grande', textXLarge: 'Muito grande', highContrast: 'Alto contraste', reduceMotion: 'Menos animações', darkMode: 'Modo escuro', data: 'Dados e privacidade', exportData: 'Exportar cópia (JSON)', importData: 'Importar cópia (JSON)', importConfirm: 'Isto substitui todos os dados desta conta. Continuar?', importError: 'Ficheiro inválido.', importDone: 'Dados importados', exportMonthlySummary: 'Exportar resumo mensal', exportMonthlySummaryHint: 'Ficheiro de texto com saldo, categorias e movimentos do mês.', openReceipts: 'Álbum de faturas', privacyNote: 'Os dados ficam no telemóvel com cópia de segurança automática. Se reinstalares a app, os dados devem voltar sozinhos; para máxima segurança, exporta JSON nas definições.', about: 'Sobre', version: 'Versão 1.0', localFirst: 'App de finanças pessoais, local no dispositivo', exportDone: 'Cópia exportada', exportMonthlyDone: 'Resumo mensal exportado' },
       },
       en: {
         login: { subtitle: 'Enter your username and password', username: 'Username', password: 'Password', submit: 'Sign in', error: 'Incorrect username or password', hint: 'Your data is stored only on this device.' },
         nav: { summary: 'Summary', expenses: 'Expenses', income: 'Income', savings: 'Savings', calendar: 'Calendar', categories: 'Categories', receipts: 'Receipts' },
         subtitles: { summary: 'Financial summary', expenses: 'Your expenses', income: 'Your income', savings: 'Your savings', calendar: 'Calendar', categories: 'Categories', history: 'History' },
         fab: { newIncome: 'New Income', newExpense: 'New Expense', quickReceipt: 'Receipt photo', registerSavings: 'New Savings' },
-        settings: { title: 'Settings & accessibility', profile: 'Profile', activeProfile: 'Active profile', switchUser: 'Switch user', switchUserHint: 'You will return to the sign-in screen to enter your username and password.', language: 'Language', langPt: 'Português', langEn: 'English', visual: 'Display & reading', textSize: 'Text size', textNormal: 'Normal', textLarge: 'Large', textXLarge: 'Extra large', highContrast: 'High contrast', reduceMotion: 'Reduce motion', data: 'Data & privacy', exportData: 'Export backup (JSON)', exportMonthlySummary: 'Export monthly summary', exportMonthlySummaryHint: 'Text file with balance, categories and this month\'s transactions.', openReceipts: 'Receipt album', privacyNote: 'All data stays on this device only.', about: 'About', version: 'Version 1.0', localFirst: 'Local-first personal finance app', exportDone: 'Backup downloaded', exportMonthlyDone: 'Monthly summary exported' },
+        settings: { title: 'Settings & accessibility', profile: 'Profile', activeProfile: 'Active profile', switchUser: 'Switch user', switchUserHint: 'You will return to the sign-in screen to enter your username and password.', language: 'Language', langPt: 'Português', langEn: 'English', visual: 'Display & reading', textSize: 'Text size', textNormal: 'Normal', textLarge: 'Large', textXLarge: 'Extra large', highContrast: 'High contrast', reduceMotion: 'Reduce motion', data: 'Data & privacy', exportData: 'Export backup (JSON)', exportMonthlySummary: 'Export monthly summary', exportMonthlySummaryHint: 'Text file with balance, categories and this month\'s transactions.', openReceipts: 'Receipt album', privacyNote: 'Data stays on your phone with automatic backup. After reinstalling the app, data should restore automatically; export JSON in settings for extra safety.', about: 'About', version: 'Version 1.0', localFirst: 'Local-first personal finance app', exportDone: 'Backup downloaded', exportMonthlyDone: 'Monthly summary exported' },
       },
     };
 
@@ -1347,6 +1413,7 @@
     function setLocale(lang) {
       locale = lang;
       localStorage.setItem(localeKey(), lang);
+      void persistAllData();
       applyStaticI18n();
       if (App.currentUser) App.updateSubtitle();
       if (document.getElementById('settings-overlay')?.classList.contains('open')) App.renderSettings();
@@ -1369,7 +1436,10 @@
       } catch { return { ...DEFAULT_PREFS, reduceMotion: systemReducedMotion() }; }
     }
 
-    function savePrefs(prefs) { localStorage.setItem(prefsStorageKey(), JSON.stringify(prefs)); }
+    function savePrefs(prefs) {
+      localStorage.setItem(prefsStorageKey(), JSON.stringify(prefs));
+      void persistAllData();
+    }
 
     function applyPrefs(prefs) {
       const root = document.documentElement;
@@ -1502,6 +1572,7 @@
       }});
       if (!cred) return false;
       localStorage.setItem(BIO_KEY(user), JSON.stringify({ id: b64url(cred.rawId), user }));
+      void persistAllData();
       return true;
     }
     async function authBio(user) {
@@ -1522,7 +1593,6 @@
       formScope: 'personal',
       filters: { resumo:'month', gastos:'month', ganhos:'month', poupancas:'month', historico:'month', gastosScope:'all' },
       histType: 'expense',
-      transferSummaryMode: 'month',
       calMonth: new Date().getMonth(),
       calYear: new Date().getFullYear(),
       calSelected: today(),
@@ -1662,6 +1732,7 @@
       async completeLogin(account) {
         this.currentUser = account;
         localStorage.setItem(LAST_USER_KEY, account);
+        void persistAllData();
         setSessionUser(account);
         this.migrateLegacyStorage();
         this.screen = 'resumo';
@@ -1760,6 +1831,7 @@
       save() {
         if (!this.currentUser) return;
         localStorage.setItem(this.storageKey(), JSON.stringify(this.state));
+        void persistAllData();
       },
 
       toast(msg) {
@@ -2146,20 +2218,15 @@
         document.getElementById('form-title').textContent = editing
           ? (type==='expense'?'Editar Gasto':'Editar Ganho')
           : (type==='expense'?'Novo Gasto':'Novo Ganho');
-        document.getElementById('f-location-wrap').style.display=type==='expense'?'block':'none';
         document.getElementById('f-scope-wrap').style.display=type==='expense'?'block':'none';
         document.getElementById('f-receipt-wrap').style.display=type==='expense'?'block':'none';
 
-        const cats=this.state.categories.filter(c=>type==='expense'?c.scope!=='income':c.scope==='income');
-        document.getElementById('f-category').innerHTML=cats.map(c=>`<option value="${c.id}">${c.icon} ${esc(c.name)}</option>`).join('');
-
         if (editing) {
           document.getElementById('f-amount').value=String(editing.amount).replace('.',',');
-          document.getElementById('f-desc').value=editing.description||'';
-          document.getElementById('f-location').value=editing.location||'';
-          document.getElementById('f-note').value=editing.note||'';
+          const noteParts = [editing.note, editing.description, editing.location].filter(Boolean);
+          document.getElementById('f-note').value=noteParts.join(' · ');
           document.getElementById('f-date').value=isoToDisplay(editing.date);
-          document.getElementById('f-category').value=editing.categoryId;
+          this.editingCategoryId = editing.categoryId;
           this.formScope=editing.scope||'personal';
           document.querySelectorAll('#f-scope-wrap button').forEach(b=>b.classList.toggle('active',b.dataset.scope===this.formScope));
           if (editing.receiptId) {
@@ -2173,10 +2240,9 @@
           } else this.setNoReceipt();
         } else {
           document.getElementById('f-amount').value='';
-          document.getElementById('f-desc').value='';
-          document.getElementById('f-location').value='';
           document.getElementById('f-note').value='';
           document.getElementById('f-date').value=isoToDisplay(dateIso || today());
+          this.editingCategoryId = null;
           this.formScope='personal';
           document.querySelectorAll('#f-scope-wrap button').forEach(b=>b.classList.toggle('active',b.dataset.scope==='personal'));
           this.setNoReceipt();
@@ -2188,6 +2254,7 @@
       closeForm() {
         document.getElementById('form-overlay').classList.remove('open');
         this.editingTxId = null;
+        this.editingCategoryId = null;
         this.setNoReceipt();
       },
 
@@ -2233,15 +2300,16 @@
 
         const dateIso=this.getDateInputIso('f-date');
         if (!dateIso) { this.toast('Data inválida — usa dd/mm/aaaa'); return; }
+        const scope = this.formType === 'expense' ? this.formScope : 'personal';
         const tx={
           id: this.editingTxId || uid(),
           type:this.formType, amount,
-          categoryId:document.getElementById('f-category').value,
-          description:document.getElementById('f-desc').value.trim(),
-          location:document.getElementById('f-location').value.trim(),
+          categoryId: this.editingCategoryId || defaultCategoryId(this.formType, scope),
+          description:'',
+          location:'',
           note:document.getElementById('f-note').value.trim()||undefined,
           date:dateIso,
-          scope:this.formType==='expense'?this.formScope:'personal',
+          scope,
           receiptId:this.pendingReceiptId||undefined,
         };
         if (this.editingTxId) {
@@ -2614,63 +2682,12 @@
         input.value = '';
       },
 
-      transferSummary(dateStr, mode) {
-        const g = this.state.savingsGoal || DEFAULT_SAVINGS;
-        const ref = new Date(dateStr + 'T12:00:00');
-        const period = mode === 'month' ? 'month' : 'day';
-        const inc = sum(filterPeriod(this.state.transactions.filter(t => t.type === 'income'), period, ref));
-        const exp = sum(getAllExpenses(period, ref));
-        const net = Math.max(0, inc - exp);
-        const recommended = Math.round(net * g.percent) / 100;
-        const alreadySaved = sumSavingsTransfers(period, ref);
-        const remaining = Math.max(0, recommended - alreadySaved);
-        return { g, inc, exp, recommended, alreadySaved, remaining, period };
-      },
-
-      setTransferSummaryMode(mode, btn) {
-        this.transferSummaryMode = mode;
-        document.querySelectorAll('#st-mode-toggle button').forEach(b => b.classList.toggle('active', b.dataset.mode === mode));
-        const lbl = document.getElementById('st-date-label');
-        if (lbl) lbl.textContent = mode === 'day' ? 'Data' : 'Data (define o mês)';
-        this.updateTransferPreview();
-      },
-
-      updateTransferPreview() {
-        const dateStr = this.getDateInputIso('st-date') || today();
-        const mode = this.transferSummaryMode || 'month';
-        const { g, inc, exp, recommended, alreadySaved, remaining } = this.transferSummary(dateStr, mode);
-        const ref = new Date(dateStr + 'T12:00:00');
-        const title = mode === 'month'
-          ? `Resumo de ${esc(ref.toLocaleDateString('pt-PT',{month:'long',year:'numeric'}))}`
-          : `Resumo de ${esc(fmtDate(dateStr))}`;
-        const remainLbl = mode === 'month' ? 'deste mês' : 'deste dia';
-        let html = `<div class="lbl" style="text-transform:capitalize">${title}</div>
-          <div style="display:flex;justify-content:space-between;font-size:13px;color:#334155;margin-top:8px"><span>Ganhos</span><strong>${fmt(inc)}</strong></div>
-          <div style="display:flex;justify-content:space-between;font-size:13px;color:#334155;margin-top:4px"><span>Gastos</span><strong>${fmt(exp)}</strong></div>
-          <div style="display:flex;justify-content:space-between;font-size:14px;color:#065f46;margin-top:10px;padding-top:8px;border-top:1px solid #a7f3d0"><span>Deves guardar (${g.percent}%)</span><strong>${fmt(recommended)}</strong></div>
-          <div style="display:flex;justify-content:space-between;font-size:12px;color:#059669;margin-top:6px"><span>Já poupaste</span><strong>${fmt(alreadySaved)}</strong></div>`;
-        if (remaining > 0 && recommended > 0) {
-          html += `<div style="font-size:11px;color:#b45309;background:#fffbeb;border-radius:8px;padding:8px;margin-top:8px">Faltam ${fmt(remaining)} para a meta ${remainLbl}</div>`;
-        }
-        document.getElementById('st-preview').innerHTML = html;
-        const amountEl = document.getElementById('st-amount');
-        if (!amountEl.value && recommended > 0) {
-          amountEl.placeholder = fmt(remaining || recommended);
-        }
-      },
-
       openSavingsTransfer(dateIso) {
         document.getElementById('fab-menu').classList.remove('open');
         document.getElementById('fab').classList.remove('open');
-        const fromCalendar = !!dateIso;
-        this.transferSummaryMode = fromCalendar ? 'day' : 'month';
-        document.querySelectorAll('#st-mode-toggle button').forEach(b => b.classList.toggle('active', b.dataset.mode === this.transferSummaryMode));
-        const lbl = document.getElementById('st-date-label');
-        if (lbl) lbl.textContent = fromCalendar ? 'Data' : 'Data (define o mês)';
         document.getElementById('st-date').value = isoToDisplay(dateIso || today());
         document.getElementById('st-amount').value = '';
         document.getElementById('st-note').value = '';
-        this.updateTransferPreview();
         document.getElementById('transfer-overlay').classList.add('open');
       },
 
@@ -3003,8 +3020,14 @@
       },
     };
 
-    App.init();
-    if ('serviceWorker' in navigator) navigator.serviceWorker.register('preview-sw.js').catch(() => {});
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('preview-sw.js').catch(() => {});
+      navigator.serviceWorker.ready.then(() => persistAllData()).catch(() => {});
+    }
+    restorePersistentData().then(() => App.init());
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'hidden') void persistAllData();
+    });
   </script>
 </body>
 </html>
