@@ -4,10 +4,12 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
   <title>FinControl</title>
-  <meta name="theme-color" content="#0f766e" />
+  <meta name="theme-color" content="#0b1f3a" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-title" content="FinControl" />
   <link rel="manifest" href="manifest.webmanifest" />
+  <link rel="icon" type="image/svg+xml" href="favicon.svg" />
+  <link rel="apple-touch-icon" href="apple-touch-icon.png" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
   <style>
@@ -380,12 +382,11 @@
       text-align: center; margin-bottom: 28px;
     }
     .login-icon {
-      width: 64px; height: 64px; margin: 0 auto 12px;
-      border-radius: 16px; background: #4338ca;
-      display: flex; align-items: center; justify-content: center;
-      box-shadow: 0 8px 24px rgba(67,56,202,.25);
+      width: 72px; height: 72px; margin: 0 auto 12px;
+      border-radius: 18px; overflow: hidden;
+      box-shadow: 0 8px 24px rgba(11,31,58,.35);
     }
-    .login-icon svg { width: 32px; height: 32px; color: #fff; }
+    .login-icon img { width: 100%; height: 100%; object-fit: cover; display: block; }
     .login-brand h2 { font-size: 24px; font-weight: 700; color: #0f172a; margin: 0; }
     .login-brand p { font-size: 13px; color: #64748b; margin: 6px 0 0; }
     .login-field { margin-bottom: 14px; }
@@ -409,7 +410,7 @@
     <button type="button" class="btn-access login-access" onclick="App.openSettings()" aria-label="Definições" title="Definições">♿</button>
     <div class="login-brand">
       <div class="login-icon">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+        <img src="icon-192.png" alt="FinControl" />
       </div>
       <h2>FinControl</h2>
       <p data-i18n="login.subtitle">Introduz o utilizador e a palavra-passe para entrar</p>
@@ -419,7 +420,7 @@
         <label for="login-user" data-i18n="login.username">Utilizador</label>
         <input id="login-user" type="text" autocomplete="off" oninput="App.updateFaceIdButton()" />
       </div>
-      <div class="login-field">
+      <div class="login-field" id="login-pass-wrap">
         <label for="login-pass" data-i18n="login.password">Palavra-passe</label>
         <input id="login-pass" type="password" autocomplete="new-password" />
       </div>
@@ -1616,6 +1617,7 @@
     }
 
     const BIO_KEY = (u) => 'fincontrol_webauthn_' + u;
+    const LAST_USER_KEY = 'fincontrol_last_user';
     const b64url = (buf) => btoa(String.fromCharCode(...new Uint8Array(buf))).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');
     const fromB64url = (v) => { const p = v.replace(/-/g,'+').replace(/_/g,'/'); const b = atob(p); const o = new Uint8Array(b.length); for (let i=0;i<b.length;i++) o[i]=b.charCodeAt(i); return o; };
     async function canBio() {
@@ -1735,6 +1737,22 @@
 
       init() {
         setSessionUser(null);
+        void this.tryAutoFaceIdLogin();
+      },
+
+      async tryAutoFaceIdLogin() {
+        const last = localStorage.getItem(LAST_USER_KEY);
+        if (!last || !hasBio(last) || !(await canBio())) return;
+        const userInput = document.getElementById('login-user');
+        const passWrap = document.getElementById('login-pass-wrap');
+        const subtitle = document.querySelector('.login-brand p');
+        if (userInput) userInput.value = last;
+        if (passWrap) passWrap.style.display = 'none';
+        if (subtitle) subtitle.textContent = locale === 'en' ? 'Use Face ID to sign in' : 'Usa Face ID para entrar';
+        this.updateFaceIdButton();
+        const faceBtn = document.getElementById('login-faceid');
+        if (faceBtn) faceBtn.style.display = 'block';
+        if (await authBio(last)) await this.completeLogin(last);
       },
 
       updateSubtitle() {
@@ -1783,6 +1801,7 @@
 
       async completeLogin(account) {
         this.currentUser = account;
+        localStorage.setItem(LAST_USER_KEY, account);
         setSessionUser(account);
         this.migrateLegacyStorage();
         this.screen = 'resumo';

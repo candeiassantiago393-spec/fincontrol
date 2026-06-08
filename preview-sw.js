@@ -1,5 +1,5 @@
 const CACHE = 'fincontrol-preview-v1';
-const ASSETS = ['./mobile-preview.html', './manifest.webmanifest', './sample-data.json'];
+const ASSETS = ['./mobile-preview.html', './manifest.webmanifest', './sample-data.json', './icon-192.png', './icon-512.png', './apple-touch-icon.png', './favicon.svg'];
 
 self.addEventListener('install', (e) => {
   e.waitUntil(caches.open(CACHE).then((c) => c.addAll(ASSETS)).then(() => self.skipWaiting()));
