@@ -1,7 +1,8 @@
-const CACHE = 'fincontrol-preview-v26';
+const CACHE = 'fincontrol-preview-v28';
 const DATA_CACHE = 'fincontrol-data-v1';
 const BACKUP_CACHE_URL = '/__fincontrol_backup__';
-const ASSETS = ['./index.html', './mobile-preview.html', './manifest.webmanifest', './sample-data.json', './icon-192.png', './icon-512.png', './apple-touch-icon.png', './favicon.svg'];
+/* Não pré-cachear HTML — evita ficar preso em versões antigas (ex. 1.2.7) */
+const ASSETS = ['./manifest.webmanifest', './sample-data.json', './icon-192.png', './icon-512.png', './apple-touch-icon.png', './favicon.svg'];
 
 self.addEventListener('install', (e) => {
   e.waitUntil(caches.open(CACHE).then((c) => c.addAll(ASSETS)).then(() => self.skipWaiting()));
@@ -36,7 +37,8 @@ function isNetworkFirst(request) {
   const url = new URL(request.url);
   return request.mode === 'navigate'
     || url.pathname.endsWith('.html')
-    || url.pathname.endsWith('preview-sw.js');
+    || url.pathname.endsWith('preview-sw.js')
+    || url.search.includes('refresh=');
 }
 
 self.addEventListener('fetch', (e) => {
