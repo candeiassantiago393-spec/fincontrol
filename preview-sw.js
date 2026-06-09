@@ -1,4 +1,4 @@
-const CACHE = 'fincontrol-preview-v28';
+const CACHE = 'fincontrol-preview-v29';
 const DATA_CACHE = 'fincontrol-data-v1';
 const BACKUP_CACHE_URL = '/__fincontrol_backup__';
 /* Não pré-cachear HTML — evita ficar preso em versões antigas (ex. 1.2.7) */

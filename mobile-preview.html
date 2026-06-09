@@ -1144,7 +1144,7 @@
       { id:'other-income', name:'Outros ganhos', icon:'💵', color:'#6ee7b7', scope:'income' },
     ];
 
-    const APP_VERSION = '1.3.0';
+    const APP_VERSION = '1.3.1';
     const DEFAULT_AGENDA_SETTINGS = {
       reminderDaysBefore: 1,
       businessName: '',
@@ -2806,7 +2806,6 @@
         }).join('') : '<div class="empty">Sem marcações neste dia.</div>';
         return `<section class="screen active">
           ${banner}
-          <button class="btn-secondary" onclick="App.openAptForm()">+ Nova marcação</button>
           <div class="card">
             <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
               <button type="button" class="btn-icon" onclick="App.changeAgMonth(-1)">‹</button>
