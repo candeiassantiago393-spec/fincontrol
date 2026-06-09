@@ -876,7 +876,7 @@
       { id:'other-income', name:'Outros ganhos', icon:'💵', color:'#6ee7b7', scope:'income' },
     ];
 
-    const APP_VERSION = '1.2.2';
+    const APP_VERSION = '1.2.3';
     const DEFAULT_AGENDA_SETTINGS = {
       reminderDaysBefore: 1,
       businessName: '',
@@ -1807,6 +1807,7 @@
       editingAptId: null,
       reminderQueue: [],
       reminderIndex: 0,
+      prefsDraft: null,
       viewerReceiptId: null,
       detailTxId: null,
       detailSavingsId: null,
@@ -2679,11 +2680,20 @@
                   </div>
                   ${g.budget ? `<div class="budget-row">
                     <div class="budget-field"><label>Gasto/mês €</label><span class="budget-spent ${metaCls}">${fmt(spent)}</span></div>
-                    <div class="budget-field"><label>Orçamento/mês €</label><input class="budget-input" type="number" min="0" value="${limit||''}" placeholder="—" onchange="App.setCategoryBudget('${c.id}', this.value)" /></div>
+                    <div class="budget-field"><label>Orçamento/mês €</label><input class="budget-input" type="number" min="0" data-budget-cat="${c.id}" value="${limit||''}" placeholder="—" onchange="App.setCategoryBudget('${c.id}', this.value)" /></div>
                   </div>${limit>0?`<div class="budget-meta ${metaCls}">${pct}% do orçamento${spent>=limit?' · Orçamento ultrapassado':''}</div>`:''}` : ''}
                 </div>`;}).join('')}
             `).join('')}
-          </div>`;
+          </div>
+          <button type="button" class="btn-primary" style="width:100%;margin-top:16px" onclick="App.saveCategoriesSettings()">Guardar categorias</button>`;
+      },
+
+      saveCategoriesSettings() {
+        document.querySelectorAll('#categories-settings-body [data-budget-cat]').forEach((input) => {
+          this.setCategoryBudget(input.dataset.budgetCat, input.value);
+        });
+        this.toast('Categorias guardadas');
+        this.closeCategoriesSettings();
       },
 
       saveAgendaSettings() {
@@ -2694,7 +2704,6 @@
           messageTemplate: document.getElementById('ag-template')?.value?.trim() || DEFAULT_AGENDA_SETTINGS.messageTemplate,
         };
         this.save();
-        this.toast('Definições da agenda guardadas');
       },
 
       toggleFab() {
@@ -3064,8 +3073,17 @@
       },
 
       openSettings() {
+        this.prefsDraft = loadPrefs();
         this.renderSettings();
         document.getElementById('settings-overlay').classList.add('open');
+      },
+
+      saveAccessibilitySettings() {
+        if (!this.prefsDraft) this.prefsDraft = loadPrefs();
+        savePrefs(this.prefsDraft);
+        applyPrefs(this.prefsDraft);
+        if (this.currentUser) this.saveAgendaSettings();
+        this.toast('Acessibilidades guardadas');
       },
 
       closeSettings() {
@@ -3073,7 +3091,7 @@
       },
 
       renderSettings() {
-        const prefs = loadPrefs();
+        const prefs = this.prefsDraft || loadPrefs();
         const user = this.currentUser || '';
         const loggedIn = !!this.currentUser;
         document.getElementById('settings-title').textContent = t('settings.title');
@@ -3143,9 +3161,12 @@
               <div class="field"><label>Nome profissional</label><input type="text" id="ag-business" placeholder="Ex: Venusia Francisco" value="${esc(this.getAgendaSettings().businessName)}" /></div>
               <div class="field"><label>Mensagem de confirmação</label><textarea id="ag-template" rows="4" style="width:100%;padding:10px;border:1px solid #e2e8f0;border-radius:12px;font-size:14px">${esc(this.getAgendaSettings().messageTemplate)}</textarea>
               <p style="font-size:11px;color:#94a3b8;margin-top:6px">Variáveis: {cliente}, {data}, {hora}, {servico}, {profissional}</p></div>
-              <button type="button" class="btn-primary" style="width:100%;margin-top:8px" onclick="App.saveAgendaSettings()">Guardar</button>
             </div>
           </section>` : ''}
+          <section class="settings-section">
+            <button type="button" class="btn-primary" style="width:100%;padding:14px;font-size:15px;font-weight:600" onclick="App.saveAccessibilitySettings()">Guardar acessibilidades</button>
+            <p style="font-size:11px;color:#94a3b8;text-align:center;margin-top:8px">Visual, modo escuro e agenda WhatsApp</p>
+          </section>
           ${dataSection}
           <section class="settings-section">
             <h3 class="settings-section-title">${t('settings.about')}</h3>
@@ -3159,13 +3180,15 @@
       },
 
       setTextSize(size) {
-        this.setPrefs({ ...loadPrefs(), textSize: size });
+        this.prefsDraft = { ...(this.prefsDraft || loadPrefs()), textSize: size };
+        this.renderSettings();
       },
 
       togglePref(key) {
-        const p = loadPrefs();
+        const p = { ...(this.prefsDraft || loadPrefs()) };
         p[key] = !p[key];
-        this.setPrefs(p);
+        this.prefsDraft = p;
+        this.renderSettings();
       },
 
       signOut() {
