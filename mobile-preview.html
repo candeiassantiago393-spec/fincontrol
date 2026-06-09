@@ -978,8 +978,8 @@
         <input type="search" class="client-picker-search" id="client-picker-search" placeholder="Pesquisar por nome…" autocomplete="off" oninput="App.filterClientPicker()" />
         <p class="client-picker-count" id="client-picker-count"></p>
         <div class="client-picker-list" id="client-picker-list"></div>
-        <button type="button" class="btn-import-contacts" onclick="document.getElementById('vcf-import-input').click()">📥 Importar contactos do iPhone (.vcf)</button>
-        <p class="contact-hint" style="margin-top:8px">No iPhone: iCloud.com → Contactos → selecionar → Exportar vCard</p>
+        <button type="button" class="btn-import-contacts" onclick="document.getElementById('vcf-import-input').click()">📥 Importar novos contactos (.vcf)</button>
+        <p class="contact-hint" style="margin-top:8px">Podes repetir quando tiveres contactos novos — só adiciona os que faltam.</p>
       </div>
     </div>
   </div>
@@ -1000,7 +1000,7 @@
             <div class="contact-suggestions" id="a-name-suggestions"></div>
           </div>
           <div class="client-actions-row">
-            <button type="button" class="btn-import-contacts" onclick="document.getElementById('vcf-import-input').click()">📥 Importar (.vcf)</button>
+            <button type="button" class="btn-import-contacts" onclick="document.getElementById('vcf-import-input').click()">📥 Novos (.vcf)</button>
             <button type="button" class="btn-import-contacts" id="a-import-contacts" onclick="App.importAptContacts()">📇 Contactos</button>
           </div>
           <p class="contact-import-msg" id="a-import-msg"></p>
@@ -1234,7 +1234,7 @@
       { id:'other-income', name:'Outros ganhos', icon:'💵', color:'#6ee7b7', scope:'income' },
     ];
 
-    const APP_VERSION = '1.3.6';
+    const APP_VERSION = '1.3.7';
     const DEFAULT_AGENDA_SETTINGS = {
       reminderDaysBefore: 1,
       businessName: '',
@@ -2989,6 +2989,7 @@
       },
 
       CONTACTS_KEY: 'fincontrol_device_contacts',
+      CONTACTS_IMPORTED_AT_KEY: 'fincontrol_contacts_imported_at',
       _contactHits: [],
 
       normalizeClientPhone(p) {
@@ -3002,6 +3003,22 @@
 
       saveDeviceContacts(list) {
         localStorage.setItem(this.CONTACTS_KEY, JSON.stringify(list));
+      },
+
+      getLastContactsImport() {
+        return localStorage.getItem(this.CONTACTS_IMPORTED_AT_KEY) || '';
+      },
+
+      saveLastContactsImport() {
+        localStorage.setItem(this.CONTACTS_IMPORTED_AT_KEY, new Date().toISOString());
+      },
+
+      formatLastContactsImport() {
+        const raw = this.getLastContactsImport();
+        if (!raw) return 'nunca';
+        try {
+          return new Date(raw).toLocaleString('pt-PT', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+        } catch { return 'nunca'; }
       },
 
       clientsFromAppointments() {
@@ -3162,19 +3179,30 @@
             added++;
           }
           this.saveDeviceContacts(existing);
+          if (parsed.length > 0) this.saveLastContactsImport();
           const total = existing.length;
-          if (msg) msg.textContent = added > 0 ? (added + ' contacto(s) novos — total: ' + total) : ('Sem novos — total: ' + total);
+          const resultMsg = added > 0
+            ? (added + ' contacto(s) novos adicionados — total: ' + total)
+            : ('Nenhum contacto novo — já tens ' + total + ' na app');
+          if (msg) msg.textContent = resultMsg;
+          this.toast(resultMsg);
           this.renderFrequentClients();
           this.filterClientPicker();
           this.onAptNameInput();
+          if (document.getElementById('settings-overlay')?.classList.contains('open')) this.renderSettings();
         } catch (err) {
-          if (msg) msg.textContent = 'Ficheiro inválido. Exporta contactos em formato .vcf';
+          const errMsg = 'Ficheiro inválido. Exporta contactos em formato .vcf';
+          if (msg) msg.textContent = errMsg;
+          this.toast(errMsg);
         }
         e.target.value = '';
       },
 
       clearImportedContacts() {
+        if (!confirm('Remover todos os contactos importados? As clientes das marcações anteriores mantêm-se.')) return;
         this.saveDeviceContacts([]);
+        localStorage.removeItem(this.CONTACTS_IMPORTED_AT_KEY);
+        this.toast('Contactos importados removidos');
         if (document.getElementById('settings-overlay')?.classList.contains('open')) this.renderSettings();
       },
 
@@ -4137,9 +4165,11 @@
           <section class="settings-section">
             <h3 class="settings-section-title">Clientes da agenda</h3>
             <div class="settings-group" style="padding:14px 16px">
-              <p style="font-size:13px;color:#64748b;margin:0 0 10px">${this.getDeviceContacts().length} contacto(s) importados · ${this.getAllClientContacts().length} cliente(s) no total</p>
-              <button type="button" class="btn-secondary" style="width:100%;margin-bottom:8px" onclick="document.getElementById('vcf-import-input').click()">📥 Importar contactos (.vcf)</button>
-              <p style="font-size:11px;color:#94a3b8;margin:0 0 10px">iPhone: iCloud.com → Contactos → Exportar vCard. Depois abre o ficheiro neste telemóvel.</p>
+              <p style="font-size:13px;color:#64748b;margin:0 0 6px">${this.getDeviceContacts().length} importados · ${this.getAllClientContacts().length} clientes no total</p>
+              <p style="font-size:11px;color:#94a3b8;margin:0 0 12px">Última importação: ${this.formatLastContactsImport()}</p>
+              <button type="button" class="btn-primary" style="width:100%;margin-bottom:8px" onclick="document.getElementById('vcf-import-input').click()">📥 Importar novos contactos (.vcf)</button>
+              <p style="font-size:11px;color:#94a3b8;margin:0 0 10px">Quando tiveres contactos novos no iPhone, exporta outra vez o .vcf e importa aqui — só entram os que ainda não estão na app.</p>
+              <p style="font-size:11px;color:#94a3b8;margin:0 0 10px">iCloud.com → Contactos → Exportar vCard → abrir ficheiro neste telemóvel.</p>
               <button type="button" class="btn-secondary" style="width:100%;color:#dc2626;border-color:#fecaca" onclick="App.clearImportedContacts()">Limpar contactos importados</button>
             </div>
           </section>
