@@ -225,6 +225,68 @@
     html.dark-mode .fab-opt.income { color: #6ee7b7 !important; }
     html.dark-mode .fab-opt.savings { color: #5eead4 !important; }
     html.dark-mode .fab-opt.photo { color: #c4b5fd !important; }
+    html.dark-mode main { background: transparent !important; color: var(--dm-text) !important; }
+    html.dark-mode .spend-alert,
+    html.dark-mode .goal-card,
+    html.dark-mode .savings-card,
+    html.dark-mode .savings-preview,
+    html.dark-mode .form-savings-card,
+    html.dark-mode .detail-savings,
+    html.dark-mode .detail-empty,
+    html.dark-mode .album-storage,
+    html.dark-mode .upload-zone,
+    html.dark-mode .receipt-btn,
+    html.dark-mode .search-item {
+      background: var(--dm-surface) !important;
+      border-color: var(--dm-border) !important;
+      color: var(--dm-text) !important;
+    }
+    html.dark-mode .spend-alert.ok .title,
+    html.dark-mode .spend-alert.ok .spend-alert-amount,
+    html.dark-mode .goal-card .title,
+    html.dark-mode .savings-head .title,
+    html.dark-mode .savings-amount,
+    html.dark-mode .compare-row-head .lbl,
+    html.dark-mode .compare-row-head .val,
+    html.dark-mode .detail-savings .amount {
+      color: var(--dm-text) !important;
+    }
+    html.dark-mode .spend-alert .sub,
+    html.dark-mode .savings-head .sub,
+    html.dark-mode .goal-card .sub,
+    html.dark-mode .compare-sub,
+    html.dark-mode .compare-legend,
+    html.dark-mode .field-hint,
+    html.dark-mode .login-hint {
+      color: var(--dm-muted) !important;
+    }
+    html.dark-mode .spend-alert.warn,
+    html.dark-mode .goal-card.behind {
+      background: #3f2e12 !important;
+      border-color: #78350f !important;
+    }
+    html.dark-mode .spend-alert.danger,
+    html.dark-mode .goal-card.far_behind {
+      background: #3f1d1d !important;
+      border-color: #7f1d1d !important;
+    }
+    html.dark-mode .goal-card.on_track,
+    html.dark-mode .spend-alert.ok {
+      background: var(--dm-surface-2) !important;
+    }
+    html.dark-mode .compare-badge.neutral { background: var(--dm-surface-2) !important; color: var(--dm-muted) !important; }
+    html.dark-mode .compare-chart { border-color: var(--dm-border) !important; }
+    html.dark-mode .compare-chart .mbar.prev { background: #475569 !important; }
+    html.dark-mode .cal-day { color: var(--dm-text) !important; }
+    html.dark-mode .cal-day.has-tx { background: var(--dm-active) !important; color: var(--dm-accent) !important; }
+    html.dark-mode .cal-day.today { border-color: var(--dm-accent) !important; }
+    html.dark-mode .login-submit { background: var(--dm-brand) !important; color: #fff !important; }
+    html.dark-mode #login-faceid { background: var(--dm-surface-2) !important; color: var(--dm-accent) !important; }
+    html.dark-mode [style*="color:#0f172a"],
+    html.dark-mode [style*="color:#64748b"],
+    html.dark-mode [style*="color:#94a3b8"] {
+      color: var(--dm-muted) !important;
+    }
     .btn-search { width: 40px; height: 40px; border: none; border-radius: 12px; background: #f0fdfa; color: #0f766e; cursor: pointer; font-size: 16px; }
     .search-overlay { display: none; position: fixed; inset: 0; z-index: 55; background: rgba(255,255,255,.97); flex-direction: column; }
     .search-overlay.open { display: flex; }
@@ -1006,7 +1068,7 @@
       { id:'other-income', name:'Outros ganhos', icon:'💵', color:'#6ee7b7', scope:'income' },
     ];
 
-    const APP_VERSION = '1.2.7';
+    const APP_VERSION = '1.2.8';
     const DEFAULT_AGENDA_SETTINGS = {
       reminderDaysBefore: 1,
       businessName: '',
@@ -1664,6 +1726,10 @@
     }
 
     function setSessionUser(user) {
+      if (user && !localStorage.getItem(prefsStorageKey(user))) {
+        const guest = localStorage.getItem(prefsStorageKey(null));
+        if (guest) localStorage.setItem(prefsStorageKey(user), guest);
+      }
       prefsUser = user;
       const saved = localStorage.getItem(localeKey());
       locale = saved === 'en' ? 'en' : 'pt';
@@ -3333,7 +3399,7 @@
           </section>` : ''}
           <section class="settings-section">
             <button type="button" class="btn-primary" style="width:100%;padding:14px;font-size:15px;font-weight:600" onclick="App.saveAccessibilitySettings()">Guardar acessibilidades</button>
-            <p style="font-size:11px;color:#94a3b8;text-align:center;margin-top:8px">Visual, modo escuro e agenda WhatsApp</p>
+            <p style="font-size:11px;color:#94a3b8;text-align:center;margin-top:8px">O modo escuro aplica-se ao ligar o interruptor. Este botão guarda agenda WhatsApp.</p>
           </section>
           ${dataSection}
           <section class="settings-section">
@@ -3356,6 +3422,8 @@
 
       setTextSize(size) {
         this.prefsDraft = { ...(this.prefsDraft || loadPrefs()), textSize: size };
+        applyPrefs(this.prefsDraft);
+        savePrefs(this.prefsDraft);
         this.renderSettings();
       },
 
@@ -3363,6 +3431,8 @@
         const p = { ...(this.prefsDraft || loadPrefs()) };
         p[key] = !p[key];
         this.prefsDraft = p;
+        applyPrefs(p);
+        savePrefs(p);
         this.renderSettings();
       },
 
