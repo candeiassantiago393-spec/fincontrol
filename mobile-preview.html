@@ -876,7 +876,7 @@
       { id:'other-income', name:'Outros ganhos', icon:'💵', color:'#6ee7b7', scope:'income' },
     ];
 
-    const APP_VERSION = '1.2.3';
+    const APP_VERSION = '1.2.4';
     const DEFAULT_AGENDA_SETTINGS = {
       reminderDaysBefore: 1,
       businessName: '',
@@ -1821,7 +1821,7 @@
       listSavingsMonth: { poupancas:'', historico:'' },
       listSavingsDate: { poupancas:'', historico:'' },
       listCategory: { gastos:'all', ganhos:'all', historico:'all' },
-      collapsed: { insights: true, analytics: true },
+      collapsed: { insights: true, categories: true, analytics: true },
       catColor: '#f97316',
       CAT_COLORS: ['#f97316','#3b82f6','#ef4444','#a855f7','#22c55e','#ec4899','#6366f1','#64748b','#0ea5e9','#14b8a6','#f59e0b','#10b981'],
 
@@ -1963,7 +1963,7 @@
         setSessionUser(account);
         this.migrateLegacyStorage();
         this.screen = 'resumo';
-        this.collapsed = { insights: true, analytics: true };
+        this.collapsed = { insights: true, categories: true, analytics: true };
         document.querySelectorAll('.nav button').forEach(b => b.classList.toggle('active', b.dataset.screen === 'resumo'));
         this.updateSubtitle();
         document.getElementById('login-screen').classList.add('hidden');
@@ -2100,6 +2100,39 @@
         main.innerHTML = this[fns[this.screen]]?this[fns[this.screen]]():'';
       },
 
+      renderCategoriesPanel(period) {
+        const exp = getAllExpenses(period);
+        const inc = filterPeriod(this.state.transactions.filter(t => t.type === 'income'), period);
+        const groups = [
+          { title: 'Pessoais', scope: 'personal', txs: exp, label: 'Gasto' },
+          { title: 'Profissionais', scope: 'professional', txs: exp, label: 'Gasto' },
+          { title: 'Ganhos', scope: 'income', txs: inc, label: 'Ganho' },
+        ];
+        const cats = this.state.categories.slice().sort((a, b) => a.name.localeCompare(b.name, 'pt'));
+        return `
+          <button type="button" class="btn-secondary" style="width:100%;margin-bottom:12px" onclick="App.openCategoriesSettings()">Editar categorias</button>
+          <div class="card" style="padding:0 16px">
+            ${groups.map(g => {
+              const scopeCats = cats.filter(c => c.scope === g.scope)
+                .sort((a, b) => sum(g.txs.filter(t => t.categoryId === b.id)) - sum(g.txs.filter(t => t.categoryId === a.id)));
+              return `
+                <div class="section-title">${g.title}</div>
+                ${scopeCats.map(c => {
+                  const total = sum(g.txs.filter(t => t.categoryId === c.id));
+                  return `<div class="tx">
+                    <div class="tx-icon" style="background:${c.color}22">${c.icon}</div>
+                    <div class="tx-info">
+                      <div class="name">${esc(c.name)}</div>
+                      <div style="font-size:11px;color:#94a3b8">${g.label}</div>
+                    </div>
+                    <div class="tx-amount">${fmt(total)}</div>
+                  </div>`;
+                }).join('')}
+              `;
+            }).join('')}
+          </div>`;
+      },
+
       renderResumo() {
         const p=this.filters.resumo;
         const inc=filterPeriod(this.state.transactions.filter(t=>t.type==='income'), p);
@@ -2108,6 +2141,7 @@
         const prof=exp.filter(t=>t.scope==='professional');
         const top=this.topCategories(exp);
         const insights = savingsCardHtml() + spendingAlertCardHtml() + goalsPanelHtml();
+        const categoriesPanel = this.renderCategoriesPanel(p);
         const analytics = (top.length?`<div class="card"><div style="font-size:14px;font-weight:600;margin-bottom:8px">Top Categorias</div>
             ${top.map(({c,total})=>`<div class="tx"><div class="tx-icon" style="background:${c.color}22">${c.icon}</div>
               <div class="tx-info"><div class="name">${esc(c.name)}</div></div><div class="tx-amount">${fmt(total)}</div></div>`).join('')}
@@ -2129,6 +2163,7 @@
             <div class="card"><div class="lbl">Profissional</div><div class="val">${fmt(sum(prof))}</div></div>
           </div>
           ${collapseHtml('insights','Metas e alertas','Poupança, alertas e objetivos', insights, !this.collapsed.insights)}
+          ${collapseHtml('categories','Categorias','Gastos, ganhos e editar', categoriesPanel, !this.collapsed.categories)}
           ${collapseHtml('analytics','Análise','Comparação mensal', analytics, !this.collapsed.analytics)}
         </section>`;
       },
