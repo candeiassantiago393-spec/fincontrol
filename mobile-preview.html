@@ -902,6 +902,16 @@
     </div>
   </div>
 
+  <div class="overlay center" id="security-overlay" onclick="if(event.target===this)App.closeAccountSecurity()">
+    <div class="sheet">
+      <div class="sheet-header">
+        <h2 id="security-title">Segurança da conta</h2>
+        <button class="sheet-close" onclick="App.closeAccountSecurity()">×</button>
+      </div>
+      <div class="sheet-body" id="security-body"></div>
+    </div>
+  </div>
+
   <div class="overlay" id="categories-settings-overlay" onclick="if(event.target===this)App.closeCategoriesSettings()">
     <div class="sheet">
       <div class="sheet-header">
@@ -1144,7 +1154,7 @@
       { id:'other-income', name:'Outros ganhos', icon:'💵', color:'#6ee7b7', scope:'income' },
     ];
 
-    const APP_VERSION = '1.3.1';
+    const APP_VERSION = '1.3.2';
     const DEFAULT_AGENDA_SETTINGS = {
       reminderDaysBefore: 1,
       businessName: '',
@@ -1980,6 +1990,61 @@
 
     const BIO_KEY = (u) => 'fincontrol_webauthn_' + u;
     const LAST_USER_KEY = 'fincontrol_last_user';
+    const CRED_STORE_KEY = 'fincontrol_account_credentials';
+    const REVOKED_ACCOUNTS_KEY = 'fincontrol_revoked_accounts';
+
+    function loadCredStore() {
+      try { return JSON.parse(localStorage.getItem(CRED_STORE_KEY) || '{}'); } catch { return {}; }
+    }
+    function saveCredStore(store) {
+      localStorage.setItem(CRED_STORE_KEY, JSON.stringify(store));
+      void persistAllData();
+    }
+    function loadRevokedAccounts() {
+      try { return JSON.parse(localStorage.getItem(REVOKED_ACCOUNTS_KEY) || '[]'); } catch { return []; }
+    }
+    function revokeAccount(user) {
+      const list = loadRevokedAccounts();
+      if (!list.includes(user)) {
+        list.push(user);
+        localStorage.setItem(REVOKED_ACCOUNTS_KEY, JSON.stringify(list));
+        void persistAllData();
+      }
+    }
+    function isAccountRevoked(user) {
+      return loadRevokedAccounts().includes(user);
+    }
+    function getStoredPassword(user) {
+      const store = loadCredStore();
+      if (Object.prototype.hasOwnProperty.call(store, user)) return store[user];
+      if (App.USERS[user] !== undefined) return App.USERS[user];
+      return null;
+    }
+    function clearBio(user) {
+      localStorage.removeItem(BIO_KEY(user));
+      void persistAllData();
+    }
+    function migrateUserStorage(oldUser, newUser) {
+      const prefixes = ['fincontrol_preview_', 'fincontrol_preferences_', 'fincontrol_locale_'];
+      prefixes.forEach((prefix) => {
+        const ok = prefix + oldUser;
+        const nk = prefix + newUser;
+        const val = localStorage.getItem(ok);
+        if (val !== null) {
+          localStorage.setItem(nk, val);
+          localStorage.removeItem(ok);
+        }
+      });
+      void persistAllData();
+    }
+    function isUsernameAvailable(name, currentUser) {
+      const key = String(name || '').trim().toLowerCase();
+      if (!key || key.length < 2 || !/^[a-z0-9._-]+$/.test(key)) return false;
+      if (key === currentUser) return true;
+      if (isAccountRevoked(key)) return false;
+      if (localStorage.getItem('fincontrol_preview_' + key)) return false;
+      return true;
+    }
     const b64url = (buf) => btoa(String.fromCharCode(...new Uint8Array(buf))).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');
     const fromB64url = (v) => { const p = v.replace(/-/g,'+').replace(/_/g,'/'); const b = atob(p); const o = new Uint8Array(b.length); for (let i=0;i<b.length;i++) o[i]=b.charCodeAt(i); return o; };
     async function canBio() {
@@ -2119,6 +2184,9 @@
         carlos: '0612',
       },
       currentUser: null,
+      securityAction: null,
+      securityStep: 'confirm',
+      securityVerifiedPass: null,
 
       confirm(message, title = 'Confirmar') {
         return new Promise(resolve => {
@@ -2201,6 +2269,11 @@
 
       verifyUser(name, pass) {
         const key = this.normalizeUser(name);
+        if (!key || isAccountRevoked(key)) return null;
+        const store = loadCredStore();
+        if (Object.prototype.hasOwnProperty.call(store, key)) {
+          return store[key] === pass ? key : null;
+        }
         return this.USERS[key] === pass ? key : null;
       },
 
@@ -3403,6 +3476,176 @@
         document.getElementById('settings-overlay').classList.remove('open');
       },
 
+      openAccountSecurity(action) {
+        if (!this.currentUser) {
+          this.toast('Inicia sessão primeiro');
+          return;
+        }
+        this.securityAction = action;
+        this.securityStep = 'confirm';
+        this.securityVerifiedPass = null;
+        const titles = {
+          password: 'Alterar palavra-passe',
+          username: 'Alterar utilizador',
+          bio: 'Face ID / impressão digital',
+        };
+        document.getElementById('security-title').textContent = titles[action] || 'Segurança da conta';
+        this.renderAccountSecurity();
+        document.getElementById('security-overlay').classList.add('open');
+      },
+
+      closeAccountSecurity() {
+        document.getElementById('security-overlay').classList.remove('open');
+        this.securityAction = null;
+        this.securityStep = 'confirm';
+        this.securityVerifiedPass = null;
+      },
+
+      renderAccountSecurity() {
+        const errId = 'security-error';
+        if (this.securityStep === 'confirm') {
+          document.getElementById('security-body').innerHTML = `
+            <p style="font-size:13px;color:#64748b;margin-bottom:14px">Confirma o utilizador e a palavra-passe atuais para continuar.</p>
+            <form onsubmit="App.submitSecurityConfirm(event)">
+              <div class="field"><label>Utilizador atual</label>
+                <input type="text" id="sec-user" value="${esc(this.currentUser)}" readonly style="opacity:.85" /></div>
+              <div class="field"><label>Palavra-passe atual</label>
+                <input type="password" id="sec-pass" autocomplete="current-password" required autofocus /></div>
+              <p id="${errId}" style="font-size:13px;color:#ef4444;min-height:18px;margin-bottom:8px"></p>
+              <button type="submit" class="btn-primary">Confirmar identidade</button>
+            </form>`;
+          return;
+        }
+        const action = this.securityAction;
+        if (action === 'password') {
+          document.getElementById('security-body').innerHTML = `
+            <p style="font-size:13px;color:#64748b;margin-bottom:14px">A palavra-passe antiga deixa de funcionar neste dispositivo.</p>
+            <form onsubmit="App.submitSecurityPassword(event)">
+              <div class="field"><label>Nova palavra-passe</label><input type="password" id="sec-new-pass" minlength="4" required autocomplete="new-password" /></div>
+              <div class="field"><label>Repetir nova palavra-passe</label><input type="password" id="sec-new-pass2" minlength="4" required autocomplete="new-password" /></div>
+              <p id="${errId}" style="font-size:13px;color:#ef4444;min-height:18px;margin-bottom:8px"></p>
+              <button type="submit" class="btn-primary">Guardar nova palavra-passe</button>
+            </form>`;
+          return;
+        }
+        if (action === 'username') {
+          document.getElementById('security-body').innerHTML = `
+            <p style="font-size:13px;color:#64748b;margin-bottom:14px">O utilizador <strong>${esc(this.currentUser)}</strong> será desativado. Os dados passam para o novo nome.</p>
+            <form onsubmit="App.submitSecurityUsername(event)">
+              <div class="field"><label>Novo utilizador</label><input type="text" id="sec-new-user" required autocomplete="username" placeholder="Ex: santiago" /></div>
+              <p id="${errId}" style="font-size:13px;color:#ef4444;min-height:18px;margin-bottom:8px"></p>
+              <button type="submit" class="btn-primary">Guardar novo utilizador</button>
+            </form>`;
+          return;
+        }
+        if (action === 'bio') {
+          const has = hasBio(this.currentUser);
+          const bioAvail = has ? '' : '<p style="font-size:13px;color:#b45309;margin-bottom:12px">Biometria não disponível neste dispositivo ou browser.</p>';
+          document.getElementById('security-body').innerHTML = `
+            <p style="font-size:13px;color:#64748b;margin-bottom:14px">${has ? 'Face ID / impressão digital está ativo nesta conta.' : 'Podes ativar Face ID ou impressão digital para entrar mais rápido.'}</p>
+            ${bioAvail}
+            <p id="${errId}" style="font-size:13px;color:#ef4444;min-height:18px;margin-bottom:8px"></p>
+            ${has ? `<button type="button" class="btn-primary" style="margin-bottom:10px" onclick="App.setupAccountBio(true)">Configurar de novo</button>
+              <button type="button" class="btn-danger" onclick="App.removeAccountBio()">Remover biometria</button>` : `<button type="button" class="btn-primary" onclick="App.setupAccountBio(false)">Ativar Face ID / impressão digital</button>`}`;
+        }
+      },
+
+      submitSecurityConfirm(e) {
+        e.preventDefault();
+        const pass = document.getElementById('sec-pass')?.value || '';
+        const err = document.getElementById('security-error');
+        const account = this.verifyUser(this.currentUser, pass);
+        if (!account) {
+          if (err) err.textContent = t('login.error');
+          return;
+        }
+        this.securityVerifiedPass = pass;
+        this.securityStep = 'change';
+        this.renderAccountSecurity();
+      },
+
+      async submitSecurityPassword(e) {
+        e.preventDefault();
+        const err = document.getElementById('security-error');
+        const p1 = document.getElementById('sec-new-pass')?.value || '';
+        const p2 = document.getElementById('sec-new-pass2')?.value || '';
+        if (p1.length < 4) {
+          if (err) err.textContent = 'Mínimo 4 caracteres.';
+          return;
+        }
+        if (p1 !== p2) {
+          if (err) err.textContent = 'As palavras-passe não coincidem.';
+          return;
+        }
+        if (p1 === this.securityVerifiedPass) {
+          if (err) err.textContent = 'Escolhe uma palavra-passe diferente da atual.';
+          return;
+        }
+        const user = this.currentUser;
+        const store = loadCredStore();
+        store[user] = p1;
+        saveCredStore(store);
+        clearBio(user);
+        this.closeAccountSecurity();
+        this.toast('Palavra-passe alterada. Entra com a nova.');
+        this.signOut();
+      },
+
+      async submitSecurityUsername(e) {
+        e.preventDefault();
+        const err = document.getElementById('security-error');
+        const newName = this.normalizeUser(document.getElementById('sec-new-user')?.value || '');
+        if (!isUsernameAvailable(newName, this.currentUser)) {
+          if (err) err.textContent = 'Utilizador inválido ou já em uso neste dispositivo.';
+          return;
+        }
+        if (newName === this.currentUser) {
+          if (err) err.textContent = 'Escolhe um utilizador diferente.';
+          return;
+        }
+        const oldUser = this.currentUser;
+        const pass = this.securityVerifiedPass;
+        const store = loadCredStore();
+        store[newName] = pass;
+        delete store[oldUser];
+        saveCredStore(store);
+        revokeAccount(oldUser);
+        clearBio(oldUser);
+        migrateUserStorage(oldUser, newName);
+        localStorage.setItem(LAST_USER_KEY, newName);
+        this.closeAccountSecurity();
+        this.closeSettings();
+        this.toast('Utilizador alterado. Entra com o novo nome.');
+        this.signOut();
+        document.getElementById('login-user').value = newName;
+        document.getElementById('login-pass').value = '';
+      },
+
+      async setupAccountBio(replace) {
+        const err = document.getElementById('security-error');
+        if (!(await canBio())) {
+          if (err) err.textContent = 'Biometria não disponível neste browser.';
+          return;
+        }
+        if (replace) clearBio(this.currentUser);
+        const ok = await registerBio(this.currentUser);
+        if (!ok) {
+          if (err) err.textContent = 'Não foi possível configurar a biometria.';
+          return;
+        }
+        this.closeAccountSecurity();
+        this.toast('Biometria configurada');
+        this.renderSettings();
+      },
+
+      async removeAccountBio() {
+        if (!(await this.confirm('Remover Face ID / impressão digital desta conta?'))) return;
+        clearBio(this.currentUser);
+        this.closeAccountSecurity();
+        this.toast('Biometria removida');
+        this.renderSettings();
+      },
+
       renderSettings() {
         setTimeout(() => this.syncInstallButton(), 0);
         const prefs = this.prefsDraft || loadPrefs();
@@ -3425,6 +3668,23 @@
                   <p style="font-size:14px;font-weight:500;margin:0;color:#0f172a">👤 ${t('settings.switchUser')}</p>
                   <p style="font-size:12px;color:#64748b;margin:4px 0 0">${t('settings.switchUserHint')}</p>
                 </div>
+              </button>
+            </div>
+          </section>
+          <section class="settings-section">
+            <h3 class="settings-section-title">Segurança da conta</h3>
+            <div class="settings-group">
+              <button type="button" class="settings-row clickable" onclick="App.openAccountSecurity('password')">
+                <div><p style="font-size:14px;font-weight:500;margin:0">🔑 Alterar palavra-passe</p>
+                <p style="font-size:12px;color:#64748b;margin:4px 0 0">Confirma os dados atuais antes de mudar</p></div>
+              </button>
+              <button type="button" class="settings-row clickable" onclick="App.openAccountSecurity('username')">
+                <div><p style="font-size:14px;font-weight:500;margin:0">👤 Alterar utilizador</p>
+                <p style="font-size:12px;color:#64748b;margin:4px 0 0">O nome antigo deixa de funcionar</p></div>
+              </button>
+              <button type="button" class="settings-row clickable" onclick="App.openAccountSecurity('bio')">
+                <div><p style="font-size:14px;font-weight:500;margin:0">🔐 Face ID / impressão digital</p>
+                <p style="font-size:12px;color:#64748b;margin:4px 0 0">${hasBio(user) ? 'Ativo — reconfigurar ou remover' : 'Configurar neste dispositivo'}</p></div>
               </button>
             </div>
           </section>` : '';
