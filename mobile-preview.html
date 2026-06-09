@@ -170,6 +170,12 @@
     html.dark-mode .search-overlay { background: var(--dm-bg) !important; }
     html.dark-mode .search-bar input,
     html.dark-mode .search-bar select,
+    html.dark-mode .contact-suggestions,
+    html.dark-mode .contact-sug-item { background: var(--dm-surface) !important; border-color: var(--dm-border) !important; }
+    html.dark-mode .contact-sug-item:active { background: var(--dm-surface-2) !important; }
+    html.dark-mode .contact-sug-name { color: var(--dm-text) !important; }
+    html.dark-mode .contact-sug-phone { color: var(--dm-muted) !important; }
+    html.dark-mode .btn-import-contacts { background: rgba(20,184,166,.15) !important; border-color: var(--dm-brand) !important; color: var(--dm-accent) !important; }
     html.dark-mode .field input,
     html.dark-mode .field select,
     html.dark-mode .field textarea,
@@ -468,6 +474,18 @@
     .field label { display: block; font-size: 13px; font-weight: 500; color: #64748b; margin-bottom: 6px; }
     .field input, .field select, .field textarea { width: 100%; padding: 11px 14px; border: 1px solid #e2e8f0; border-radius: 12px; font-size: 15px; font-family: inherit; background: white; }
     .field input:focus, .field select:focus { outline: none; border-color: #14b8a6; box-shadow: 0 0 0 3px rgba(20,184,166,.15); }
+    .contact-field-wrap { position: relative; }
+    .contact-suggestions { display: none; position: absolute; left: 0; right: 0; top: calc(100% - 4px); z-index: 60; max-height: 200px; overflow-y: auto; background: white; border: 1px solid #e2e8f0; border-radius: 12px; box-shadow: 0 8px 24px rgba(15,23,42,.12); }
+    .contact-suggestions.open { display: block; }
+    .contact-sug-item { width: 100%; display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 12px 14px; border: none; border-bottom: 1px solid #f1f5f9; background: white; cursor: pointer; text-align: left; font-family: inherit; }
+    .contact-sug-item:last-child { border-bottom: none; }
+    .contact-sug-item:active { background: #f0fdfa; }
+    .contact-sug-name { font-size: 14px; font-weight: 600; color: #0f172a; }
+    .contact-sug-phone { font-size: 11px; color: #94a3b8; flex-shrink: 0; }
+    .btn-import-contacts { width: 100%; padding: 11px 14px; border: 1px solid #99f6e4; border-radius: 12px; background: #f0fdfa; color: #0f766e; font-size: 13px; font-weight: 600; cursor: pointer; margin-bottom: 10px; font-family: inherit; }
+    .btn-import-contacts:active { background: #ccfbf1; }
+    .contact-hint, .contact-import-msg { font-size: 11px; color: #94a3b8; margin: 6px 0 0; }
+    .contact-import-msg { color: #0f766e; margin-bottom: 8px; }
     .type-toggle { display: flex; gap: 8px; }
     .type-toggle button { flex: 1; padding: 10px; border: 1px solid #e2e8f0; border-radius: 12px; background: white; font-size: 13px; font-weight: 500; cursor: pointer; color: #64748b; }
     .type-toggle button.active { border-color: #0f766e; background: #f0fdfa; color: #0f766e; }
@@ -933,8 +951,15 @@
       </div>
       <div class="sheet-body">
         <form onsubmit="App.submitAppointment(event)">
-          <div class="field"><label>Nome da cliente</label><input type="text" id="a-name" required /></div>
-          <div class="field"><label>Telemóvel / WhatsApp</label><input type="tel" id="a-phone" required placeholder="912345678" /></div>
+          <div class="field contact-field-wrap">
+            <label>Nome da cliente</label>
+            <input type="text" id="a-name" required autocomplete="off" oninput="App.onAptNameInput()" onfocus="App.onAptNameFocus()" />
+            <div class="contact-suggestions" id="a-name-suggestions"></div>
+            <p class="contact-hint">Escreve o nome e escolhe da lista — o número preenche-se sozinho.</p>
+          </div>
+          <button type="button" class="btn-import-contacts" id="a-import-contacts" onclick="App.importAptContacts()">📇 Permitir contactos do telemóvel</button>
+          <p class="contact-import-msg" id="a-import-msg"></p>
+          <div class="field"><label>Telemóvel / WhatsApp</label><input type="tel" id="a-phone" required placeholder="Preenchido ao escolher contacto" /></div>
           <div class="field"><label>Data</label><input type="date" id="a-date" required /></div>
           <div class="field" style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
             <div><label>Início</label><input type="time" id="a-start" required value="10:00" /></div>
@@ -1157,7 +1182,7 @@
       { id:'other-income', name:'Outros ganhos', icon:'💵', color:'#6ee7b7', scope:'income' },
     ];
 
-    const APP_VERSION = '1.3.3';
+    const APP_VERSION = '1.3.4';
     const DEFAULT_AGENDA_SETTINGS = {
       reminderDaysBefore: 1,
       businessName: '',
@@ -2911,6 +2936,133 @@
         if (openForm) this.openAptForm();
       },
 
+      CONTACTS_KEY: 'fincontrol_device_contacts',
+      _contactHits: [],
+
+      normalizeClientPhone(p) {
+        return (p || '').replace(/\D/g, '');
+      },
+
+      getDeviceContacts() {
+        try { return JSON.parse(localStorage.getItem(this.CONTACTS_KEY) || '[]'); }
+        catch { return []; }
+      },
+
+      saveDeviceContacts(list) {
+        localStorage.setItem(this.CONTACTS_KEY, JSON.stringify(list));
+      },
+
+      clientsFromAppointments() {
+        const seen = new Map();
+        for (const a of (this.state.appointments || [])) {
+          const phone = this.normalizeClientPhone(a.clientPhone);
+          if (!phone) continue;
+          if (!seen.has(phone)) seen.set(phone, { name: a.clientName, phone: a.clientPhone });
+        }
+        return [...seen.values()];
+      },
+
+      getAllClientContacts() {
+        const merged = new Map();
+        for (const c of [...this.getDeviceContacts(), ...this.clientsFromAppointments()]) {
+          const key = this.normalizeClientPhone(c.phone) || (c.name || '').toLowerCase().trim();
+          if (key && !merged.has(key)) merged.set(key, c);
+        }
+        return [...merged.values()];
+      },
+
+      searchClientContacts(q) {
+        const query = (q || '').trim().toLowerCase();
+        if (!query) return [];
+        const qDigits = query.replace(/\D/g, '');
+        return this.getAllClientContacts()
+          .filter(c =>
+            (c.name || '').toLowerCase().includes(query) ||
+            (qDigits && this.normalizeClientPhone(c.phone).includes(qDigits))
+          )
+          .slice(0, 8);
+      },
+
+      renderContactSuggestions(q) {
+        const box = document.getElementById('a-name-suggestions');
+        if (!box) return;
+        const hits = this.searchClientContacts(q);
+        this._contactHits = hits;
+        if (!hits.length) { box.innerHTML = ''; box.classList.remove('open'); return; }
+        box.classList.add('open');
+        box.innerHTML = hits.map((c, i) =>
+          `<button type="button" class="contact-sug-item" onclick="App.pickClientContact(${i})">
+            <span class="contact-sug-name">${esc(c.name)}</span>
+            <span class="contact-sug-phone">${esc(c.phone)}</span>
+          </button>`
+        ).join('');
+      },
+
+      onAptNameInput() {
+        this.renderContactSuggestions(document.getElementById('a-name').value);
+      },
+
+      onAptNameFocus() {
+        const q = document.getElementById('a-name').value;
+        if (q.trim()) this.renderContactSuggestions(q);
+      },
+
+      pickClientContact(i) {
+        const c = this._contactHits[i];
+        if (!c) return;
+        document.getElementById('a-name').value = c.name;
+        document.getElementById('a-phone').value = c.phone;
+        const box = document.getElementById('a-name-suggestions');
+        if (box) { box.innerHTML = ''; box.classList.remove('open'); }
+      },
+
+      rememberAptClient(name, phone) {
+        const n = (name || '').trim();
+        const p = (phone || '').trim();
+        if (!n || !this.normalizeClientPhone(p)) return;
+        const existing = this.getDeviceContacts();
+        const key = this.normalizeClientPhone(p);
+        if (existing.some(x => this.normalizeClientPhone(x.phone) === key)) return;
+        existing.push({ name: n, phone: p });
+        this.saveDeviceContacts(existing);
+      },
+
+      updateAptContactUi() {
+        const supports = 'contacts' in navigator && 'ContactsManager' in window;
+        const btn = document.getElementById('a-import-contacts');
+        const msg = document.getElementById('a-import-msg');
+        if (msg) msg.textContent = '';
+        if (btn) btn.style.display = (supports && this.getAllClientContacts().length < 3) ? '' : 'none';
+      },
+
+      async importAptContacts() {
+        const msg = document.getElementById('a-import-msg');
+        if (!('contacts' in navigator && 'ContactsManager' in window)) {
+          if (msg) msg.textContent = 'Neste telemóvel usa as sugestões de clientes anteriores ou escreve o nome.';
+          return;
+        }
+        try {
+          const picked = await navigator.contacts.select(['name', 'tel'], { multiple: true });
+          const existing = this.getDeviceContacts();
+          let added = 0;
+          for (const c of picked) {
+            const name = (c.name && c.name[0]) || 'Sem nome';
+            const phone = (c.tel && c.tel[0]) || '';
+            if (!phone) continue;
+            const key = this.normalizeClientPhone(phone);
+            if (existing.some(x => this.normalizeClientPhone(x.phone) === key)) continue;
+            existing.push({ name: name.trim(), phone: phone.trim() });
+            added++;
+          }
+          this.saveDeviceContacts(existing);
+          if (msg) msg.textContent = added > 0 ? (added + ' contacto(s) adicionado(s)') : 'Contactos já importados';
+          this.updateAptContactUi();
+          this.onAptNameInput();
+        } catch (e) {
+          if (e.name !== 'AbortError' && msg) msg.textContent = 'Não foi possível aceder aos contactos.';
+        }
+      },
+
       openAptForm(id) {
         this.editingAptId = id || null;
         const a = id ? (this.state.appointments || []).find(x => x.id === id) : null;
@@ -2923,12 +3075,17 @@
         document.getElementById('a-end').value = a ? (a.endTime || '') : '';
         document.getElementById('a-service').value = a ? a.service : '';
         document.getElementById('a-note').value = a ? (a.note || '') : '';
+        const sug = document.getElementById('a-name-suggestions');
+        if (sug) { sug.innerHTML = ''; sug.classList.remove('open'); }
+        this.updateAptContactUi();
         document.getElementById('apt-overlay').classList.add('open');
       },
 
       closeAptForm() {
         document.getElementById('apt-overlay').classList.remove('open');
         this.editingAptId = null;
+        const sug = document.getElementById('a-name-suggestions');
+        if (sug) { sug.innerHTML = ''; sug.classList.remove('open'); }
       },
 
       submitAppointment(e) {
@@ -2946,6 +3103,7 @@
           createdAt: new Date().toISOString(),
         };
         if (!payload.clientName || !payload.clientPhone || !payload.service) return;
+        this.rememberAptClient(payload.clientName, payload.clientPhone);
         if (!this.state.appointments) this.state.appointments = [];
         if (this.editingAptId) {
           const old = this.state.appointments.find(x => x.id === this.editingAptId);
