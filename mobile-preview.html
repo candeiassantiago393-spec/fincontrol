@@ -225,6 +225,7 @@
     html.dark-mode .fab-opt.income { color: #6ee7b7 !important; }
     html.dark-mode .fab-opt.savings { color: #5eead4 !important; }
     html.dark-mode .fab-opt.photo { color: #c4b5fd !important; }
+    html.dark-mode .fab-opt.agenda { color: #5eead4 !important; }
     html.dark-mode main { background: transparent !important; color: var(--dm-text) !important; }
     html.dark-mode .spend-alert,
     html.dark-mode .goal-card,
@@ -430,6 +431,7 @@
     .fab-opt.income { color: #059669; }
     .fab-opt.savings { color: #047857; }
     .fab-opt.photo { color: #7c3aed; }
+    .fab-opt.agenda { color: #0f766e; }
     .fab { width: 56px; height: 56px; border-radius: 18px; background: linear-gradient(135deg, #14b8a6, #0f766e); color: white; border: none; font-size: 28px; cursor: pointer; display: flex; align-items: center; justify-content: center; box-shadow: 0 6px 20px rgba(15,118,110,.4); transition: transform .2s; }
     .search-bar { display: flex; gap: 8px; margin-bottom: 12px; }
     .search-bar input { flex: 1; padding: 10px 14px; border: 1px solid #e2e8f0; border-radius: 12px; font-size: 14px; font-family: inherit; background: white; }
@@ -741,6 +743,7 @@
   <div class="fab-wrap">
     <div class="fab-menu" id="fab-menu">
       <button class="fab-opt photo" onclick="App.quickReceipt()">📷 <span data-i18n="fab.quickReceipt">Foto rápida</span></button>
+      <button class="fab-opt agenda" onclick="App.openAptFromFab()">+ <span data-i18n="fab.newAppointment">Nova marcação</span></button>
       <button class="fab-opt savings" onclick="App.openSavingsTransfer()">+ <span data-i18n="fab.registerSavings">Nova Poupança</span></button>
       <button class="fab-opt income" onclick="App.openForm('income')">+ <span data-i18n="fab.newIncome">Novo Ganho</span></button>
       <button class="fab-opt expense" onclick="App.openForm('expense')">+ <span data-i18n="fab.newExpense">Novo Gasto</span></button>
@@ -1154,7 +1157,7 @@
       { id:'other-income', name:'Outros ganhos', icon:'💵', color:'#6ee7b7', scope:'income' },
     ];
 
-    const APP_VERSION = '1.3.2';
+    const APP_VERSION = '1.3.3';
     const DEFAULT_AGENDA_SETTINGS = {
       reminderDaysBefore: 1,
       businessName: '',
@@ -1788,14 +1791,14 @@
         login: { subtitle: 'Introduz o utilizador e a palavra-passe para entrar', username: 'Utilizador', password: 'Palavra-passe', submit: 'Entrar', error: 'Utilizador ou palavra-passe incorretos', hint: 'Os teus dados ficam guardados apenas neste dispositivo.' },
         nav: { summary: 'Resumo', expenses: 'Gastos', income: 'Ganhos', savings: 'Poupanças', calendar: 'Calendário', agenda: 'Agenda', categories: 'Categorias', receipts: 'Faturas' },
         subtitles: { summary: 'Resumo financeiro', expenses: 'Os teus gastos', income: 'Os teus ganhos', savings: 'As tuas poupanças', calendar: 'Calendário', agenda: 'Agenda de marcações', categories: 'Categorias', history: 'Histórico' },
-        fab: { newIncome: 'Novo Ganho', newExpense: 'Novo Gasto', quickReceipt: 'Foto rápida', registerSavings: 'Nova Poupança' },
+        fab: { newIncome: 'Novo Ganho', newExpense: 'Novo Gasto', quickReceipt: 'Foto rápida', registerSavings: 'Nova Poupança', newAppointment: 'Nova marcação' },
         settings: { title: 'Definições e acessibilidade', profile: 'Perfil', activeProfile: 'Perfil ativo', switchUser: 'Trocar utilizador', switchUserHint: 'Vais voltar ao ecrã de entrada para introduzires utilizador e palavra-passe.', language: 'Idioma', langPt: 'Português', langEn: 'English', visual: 'Visual e leitura', textSize: 'Tamanho do texto', textNormal: 'Normal', textLarge: 'Grande', textXLarge: 'Muito grande', highContrast: 'Alto contraste', reduceMotion: 'Menos animações', darkMode: 'Modo escuro', data: 'Dados e privacidade', exportData: 'Exportar cópia (JSON)', importData: 'Importar cópia (JSON)', importConfirm: 'Isto substitui todos os dados desta conta. Continuar?', importError: 'Ficheiro inválido.', importDone: 'Dados importados', exportMonthlySummary: 'Exportar resumo mensal', exportMonthlySummaryHint: 'Ficheiro de texto com saldo, categorias e movimentos do mês.', openReceipts: 'Álbum de faturas', privacyNote: 'Os dados ficam no telemóvel com cópia de segurança automática. Se reinstalares a app, os dados devem voltar sozinhos; para máxima segurança, exporta JSON nas definições.', about: 'Sobre', version: 'Versão 1.0', localFirst: 'App de finanças pessoais, local no dispositivo', exportDone: 'Cópia exportada', exportMonthlyDone: 'Resumo mensal exportado' },
       },
       en: {
         login: { subtitle: 'Enter your username and password', username: 'Username', password: 'Password', submit: 'Sign in', error: 'Incorrect username or password', hint: 'Your data is stored only on this device.' },
         nav: { summary: 'Summary', expenses: 'Expenses', income: 'Income', savings: 'Savings', calendar: 'Calendar', agenda: 'Agenda', categories: 'Categories', receipts: 'Receipts' },
         subtitles: { summary: 'Financial summary', expenses: 'Your expenses', income: 'Your income', savings: 'Your savings', calendar: 'Calendar', agenda: 'Appointments', categories: 'Categories', history: 'History' },
-        fab: { newIncome: 'New Income', newExpense: 'New Expense', quickReceipt: 'Receipt photo', registerSavings: 'New Savings' },
+        fab: { newIncome: 'New Income', newExpense: 'New Expense', quickReceipt: 'Receipt photo', registerSavings: 'New Savings', newAppointment: 'New appointment' },
         settings: { title: 'Settings & accessibility', profile: 'Profile', activeProfile: 'Active profile', switchUser: 'Switch user', switchUserHint: 'You will return to the sign-in screen to enter your username and password.', language: 'Language', langPt: 'Português', langEn: 'English', visual: 'Display & reading', textSize: 'Text size', textNormal: 'Normal', textLarge: 'Large', textXLarge: 'Extra large', highContrast: 'High contrast', reduceMotion: 'Reduce motion', data: 'Data & privacy', exportData: 'Export backup (JSON)', exportMonthlySummary: 'Export monthly summary', exportMonthlySummaryHint: 'Text file with balance, categories and this month\'s transactions.', openReceipts: 'Receipt album', privacyNote: 'Data stays on your phone with automatic backup. After reinstalling the app, data should restore automatically; export JSON in settings for extra safety.', about: 'About', version: 'Version 1.0', localFirst: 'Local-first personal finance app', exportDone: 'Backup downloaded', exportMonthlyDone: 'Monthly summary exported' },
       },
     };
@@ -3095,6 +3098,14 @@
       toggleFab() {
         const menu=document.getElementById('fab-menu'), fab=document.getElementById('fab');
         menu.classList.toggle('open'); fab.classList.toggle('open');
+      },
+
+      openAptFromFab() {
+        document.getElementById('fab-menu').classList.remove('open');
+        document.getElementById('fab').classList.remove('open');
+        if (this.screen !== 'agenda') this.go('agenda');
+        if (!this.agSelected) this.agSelected = today();
+        this.openAptForm();
       },
 
       fillFormCategories(type, selectedId) {
