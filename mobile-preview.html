@@ -297,6 +297,10 @@
     .form-savings-row { display: flex; align-items: center; gap: 8px; }
     .form-savings-row input { flex: 1; padding: 10px 12px; border: 1px solid #a7f3d0; border-radius: 10px; font-size: 16px; font-weight: 600; color: #065f46; background: white; }
     .form-savings-card .hint { font-size: 11px; color: #059669; margin-top: 6px; }
+    .form-savings-card.done, .detail-savings.done { border-color: #34d399; }
+    .savings-done-mark { color: #059669; font-weight: 700; }
+    .savings-done-msg { text-align: center; padding: 10px; font-size: 13px; font-weight: 600; color: #047857; background: #d1fae5; border-radius: 10px; margin-top: 10px; }
+    .detail-savings-btn.done { background: #d1fae5; color: #047857; cursor: default; }
     .detail-receipt { margin-bottom: 16px; }
     .detail-receipt .lbl { font-size: 13px; font-weight: 500; color: #64748b; margin-bottom: 8px; }
     .detail-receipt img { width: 100%; max-height: 200px; object-fit: cover; border-radius: 12px; border: 1px solid #e2e8f0; cursor: pointer; }
@@ -483,7 +487,7 @@
     <button data-screen="ganhos" onclick="App.go('ganhos')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg><span data-i18n="nav.income">Ganhos</span></button>
     <button data-screen="poupancas" onclick="App.go('poupancas')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 5c-1.5 0-2.8 1.4-3 2-3.5-1.5-11-.3-11 5 0 1.8 0 3 2 4.5V20h4v-2h3v2h4v-4c1-.5 1.7-1 2-2h2v-4h-2c0-1-.5-1.5-1-2"/><path d="M2 9v1c0 1.1.9 2 2 2h1"/></svg><span data-i18n="nav.savings">Poupanças</span></button>
     <button data-screen="calendario" onclick="App.go('calendario')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg><span data-i18n="nav.calendar">Calendário</span></button>
-    <button data-screen="categorias" onclick="App.go('categorias')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg><span data-i18n="nav.categories">Categorias</span></button>
+    <button data-screen="agenda" onclick="App.go('agenda')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/><path d="M8 14h.01M12 14h.01M16 14h.01M8 18h.01M12 18h.01"/></svg><span data-i18n="nav.agenda">Agenda</span></button>
   </nav>
 
   <div class="overlay" id="form-overlay" onclick="if(event.target===this)App.closeForm()">
@@ -511,7 +515,7 @@
           </div>
           <div class="field">
             <label>Data</label>
-            <input type="text" id="f-date" required placeholder="dd/mm/aaaa" maxlength="10" inputmode="numeric" autocomplete="off" oninput="App.maskDateInput(this)" />
+            <input type="text" id="f-date" required placeholder="dd/mm/aaaa" maxlength="10" inputmode="numeric" autocomplete="off" oninput="App.maskDateInput(this);App.updateFormSavingsSuggest()" />
           </div>
           <div class="field" id="f-scope-wrap">
             <label>Tipo</label>
@@ -522,7 +526,7 @@
           </div>
           <div class="field">
             <label>Categoria</label>
-            <select id="f-category"></select>
+            <select id="f-category" onchange="App.updateFormSavingsSuggest()"></select>
           </div>
           <div class="field">
             <label>Nota</label>
@@ -627,6 +631,49 @@
           <button type="submit" class="btn-primary" id="recurring-submit-btn">Criar</button>
         </form>
       </div>
+    </div>
+  </div>
+
+  <div class="overlay" id="categories-settings-overlay" onclick="if(event.target===this)App.closeCategoriesSettings()">
+    <div class="sheet">
+      <div class="sheet-header">
+        <h2>Editar categorias</h2>
+        <button class="sheet-close" onclick="App.closeCategoriesSettings()">×</button>
+      </div>
+      <div class="sheet-body" id="categories-settings-body"></div>
+    </div>
+  </div>
+
+  <div class="overlay center" id="apt-overlay" onclick="if(event.target===this)App.closeAptForm()">
+    <div class="sheet">
+      <div class="sheet-header">
+        <h2 id="apt-form-title">Nova marcação</h2>
+        <button class="sheet-close" onclick="App.closeAptForm()">×</button>
+      </div>
+      <div class="sheet-body">
+        <form onsubmit="App.submitAppointment(event)">
+          <div class="field"><label>Nome da cliente</label><input type="text" id="a-name" required /></div>
+          <div class="field"><label>Telemóvel / WhatsApp</label><input type="tel" id="a-phone" required placeholder="912345678" /></div>
+          <div class="field"><label>Data</label><input type="date" id="a-date" required /></div>
+          <div class="field" style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+            <div><label>Início</label><input type="time" id="a-start" required value="10:00" /></div>
+            <div><label>Fim (opc.)</label><input type="time" id="a-end" /></div>
+          </div>
+          <div class="field"><label>Serviço</label><input type="text" id="a-service" required placeholder="Ex: Cílios e sobrancelhas" /></div>
+          <div class="field"><label>Nota (opcional)</label><input type="text" id="a-note" /></div>
+          <button type="submit" class="btn-primary" id="apt-submit-btn">Guardar</button>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <div class="overlay center" id="reminders-overlay" onclick="if(event.target===this)App.closeReminders()">
+    <div class="sheet">
+      <div class="sheet-header">
+        <h2>Enviar confirmações</h2>
+        <button class="sheet-close" onclick="App.closeReminders()">×</button>
+      </div>
+      <div class="sheet-body" id="reminders-body"></div>
     </div>
   </div>
 
@@ -829,7 +876,14 @@
       { id:'other-income', name:'Outros ganhos', icon:'💵', color:'#6ee7b7', scope:'income' },
     ];
 
-    const APP_VERSION = '1.1.0';
+    const APP_VERSION = '1.2.1';
+    const DEFAULT_AGENDA_SETTINGS = {
+      reminderDaysBefore: 1,
+      businessName: '',
+      messageTemplate: 'Olá {cliente}, dia {data} tens horário marcado com {profissional} às {hora}. Posso confirmar? Obrigada',
+    };
+    const APT_STATUS_LABELS = { pending: 'Pendente', sent: 'Enviada', confirmed: 'Confirmada', cancelled: 'Cancelada' };
+    const APT_STATUS_COLORS = { pending: '#fef3c7', sent: '#dbeafe', confirmed: '#d1fae5', cancelled: '#f1f5f9' };
     const SEED_VERSION_EMPTY = 'empty-2';
     const BACKUP_IDB = 'fincontrol_persistent_v1';
     const BACKUP_CACHE = 'fincontrol-data-v1';
@@ -1454,15 +1508,15 @@
     const I18N = {
       pt: {
         login: { subtitle: 'Introduz o utilizador e a palavra-passe para entrar', username: 'Utilizador', password: 'Palavra-passe', submit: 'Entrar', error: 'Utilizador ou palavra-passe incorretos', hint: 'Os teus dados ficam guardados apenas neste dispositivo.' },
-        nav: { summary: 'Resumo', expenses: 'Gastos', income: 'Ganhos', savings: 'Poupanças', calendar: 'Calendário', categories: 'Categorias', receipts: 'Faturas' },
-        subtitles: { summary: 'Resumo financeiro', expenses: 'Os teus gastos', income: 'Os teus ganhos', savings: 'As tuas poupanças', calendar: 'Calendário', categories: 'Categorias', history: 'Histórico' },
+        nav: { summary: 'Resumo', expenses: 'Gastos', income: 'Ganhos', savings: 'Poupanças', calendar: 'Calendário', agenda: 'Agenda', categories: 'Categorias', receipts: 'Faturas' },
+        subtitles: { summary: 'Resumo financeiro', expenses: 'Os teus gastos', income: 'Os teus ganhos', savings: 'As tuas poupanças', calendar: 'Calendário', agenda: 'Agenda de marcações', categories: 'Categorias', history: 'Histórico' },
         fab: { newIncome: 'Novo Ganho', newExpense: 'Novo Gasto', quickReceipt: 'Foto rápida', registerSavings: 'Nova Poupança' },
         settings: { title: 'Definições e acessibilidade', profile: 'Perfil', activeProfile: 'Perfil ativo', switchUser: 'Trocar utilizador', switchUserHint: 'Vais voltar ao ecrã de entrada para introduzires utilizador e palavra-passe.', language: 'Idioma', langPt: 'Português', langEn: 'English', visual: 'Visual e leitura', textSize: 'Tamanho do texto', textNormal: 'Normal', textLarge: 'Grande', textXLarge: 'Muito grande', highContrast: 'Alto contraste', reduceMotion: 'Menos animações', darkMode: 'Modo escuro', data: 'Dados e privacidade', exportData: 'Exportar cópia (JSON)', importData: 'Importar cópia (JSON)', importConfirm: 'Isto substitui todos os dados desta conta. Continuar?', importError: 'Ficheiro inválido.', importDone: 'Dados importados', exportMonthlySummary: 'Exportar resumo mensal', exportMonthlySummaryHint: 'Ficheiro de texto com saldo, categorias e movimentos do mês.', openReceipts: 'Álbum de faturas', privacyNote: 'Os dados ficam no telemóvel com cópia de segurança automática. Se reinstalares a app, os dados devem voltar sozinhos; para máxima segurança, exporta JSON nas definições.', about: 'Sobre', version: 'Versão 1.0', localFirst: 'App de finanças pessoais, local no dispositivo', exportDone: 'Cópia exportada', exportMonthlyDone: 'Resumo mensal exportado' },
       },
       en: {
         login: { subtitle: 'Enter your username and password', username: 'Username', password: 'Password', submit: 'Sign in', error: 'Incorrect username or password', hint: 'Your data is stored only on this device.' },
-        nav: { summary: 'Summary', expenses: 'Expenses', income: 'Income', savings: 'Savings', calendar: 'Calendar', categories: 'Categories', receipts: 'Receipts' },
-        subtitles: { summary: 'Financial summary', expenses: 'Your expenses', income: 'Your income', savings: 'Your savings', calendar: 'Calendar', categories: 'Categories', history: 'History' },
+        nav: { summary: 'Summary', expenses: 'Expenses', income: 'Income', savings: 'Savings', calendar: 'Calendar', agenda: 'Agenda', categories: 'Categories', receipts: 'Receipts' },
+        subtitles: { summary: 'Financial summary', expenses: 'Your expenses', income: 'Your income', savings: 'Your savings', calendar: 'Calendar', agenda: 'Appointments', categories: 'Categories', history: 'History' },
         fab: { newIncome: 'New Income', newExpense: 'New Expense', quickReceipt: 'Receipt photo', registerSavings: 'New Savings' },
         settings: { title: 'Settings & accessibility', profile: 'Profile', activeProfile: 'Active profile', switchUser: 'Switch user', switchUserHint: 'You will return to the sign-in screen to enter your username and password.', language: 'Language', langPt: 'Português', langEn: 'English', visual: 'Display & reading', textSize: 'Text size', textNormal: 'Normal', textLarge: 'Large', textXLarge: 'Extra large', highContrast: 'High contrast', reduceMotion: 'Reduce motion', data: 'Data & privacy', exportData: 'Export backup (JSON)', exportMonthlySummary: 'Export monthly summary', exportMonthlySummaryHint: 'Text file with balance, categories and this month\'s transactions.', openReceipts: 'Receipt album', privacyNote: 'Data stays on your phone with automatic backup. After reinstalling the app, data should restore automatically; export JSON in settings for extra safety.', about: 'About', version: 'Version 1.0', localFirst: 'Local-first personal finance app', exportDone: 'Backup downloaded', exportMonthlyDone: 'Monthly summary exported' },
       },
@@ -1681,6 +1735,63 @@
       return !!assertion;
     }
 
+    function normalizePhoneAgenda(phone) {
+      const digits = String(phone || '').replace(/\D/g, '');
+      if (digits.startsWith('351') && digits.length >= 12) return digits;
+      if (digits.length === 9 && digits.startsWith('9')) return '351' + digits;
+      return digits;
+    }
+    function fmtAptDate(ds) {
+      const p = ds.split('-');
+      return p[2] + '/' + p[1];
+    }
+    function buildAptMessage(template, apt, businessName) {
+      return template
+        .replace(/\{cliente\}/g, apt.clientName)
+        .replace(/\{data\}/g, fmtAptDate(apt.date))
+        .replace(/\{hora\}/g, apt.startTime)
+        .replace(/\{servico\}/g, apt.service || '')
+        .replace(/\{profissional\}/g, businessName || 'nós');
+    }
+    function whatsAppUrl(phone, msg) {
+      return 'https://wa.me/' + normalizePhoneAgenda(phone) + '?text=' + encodeURIComponent(msg);
+    }
+    function addDaysIso(ds, days) {
+      const d = new Date(ds + 'T12:00:00');
+      d.setDate(d.getDate() + days);
+      return d.toISOString().slice(0, 10);
+    }
+    function reminderDateFor(ds, daysBefore) {
+      return addDaysIso(ds, -daysBefore);
+    }
+    function needsReminderToday(apt, daysBefore) {
+      if (apt.status === 'confirmed' || apt.status === 'cancelled') return false;
+      return reminderDateFor(apt.date, daysBefore) === today();
+    }
+
+    function savingsLabelForIncome(catId, description) {
+      const c = cat(catId);
+      return (description || '').trim() || c?.name || 'Ganho';
+    }
+
+    function findSuggestedSavingsTransfer(transfers, { transactionId, date, saveAmt, label }) {
+      if (transactionId) {
+        const linked = transfers.find(tr => tr.sourceTransactionId === transactionId);
+        if (linked) return linked;
+      }
+      if (!date || !saveAmt || !label) return undefined;
+      const expectedNote = `Poupança — ${label}`;
+      return transfers.find(tr =>
+        tr.date === date &&
+        tr.amount >= saveAmt - 0.005 &&
+        (tr.note === expectedNote || (tr.note || '').startsWith('Poupança —'))
+      );
+    }
+
+    function isSuggestedSavingsDone(transfers, ctx) {
+      return !!findSuggestedSavingsTransfer(transfers, ctx);
+    }
+
     const App = {
       screen: 'resumo',
       formType: 'expense',
@@ -1690,6 +1801,12 @@
       calMonth: new Date().getMonth(),
       calYear: new Date().getFullYear(),
       calSelected: today(),
+      agMonth: new Date().getMonth(),
+      agYear: new Date().getFullYear(),
+      agSelected: today(),
+      editingAptId: null,
+      reminderQueue: [],
+      reminderIndex: 0,
       viewerReceiptId: null,
       detailTxId: null,
       detailSavingsId: null,
@@ -1801,7 +1918,7 @@
       },
 
       updateSubtitle() {
-        const map = { resumo: 'subtitles.summary', gastos: 'subtitles.expenses', ganhos: 'subtitles.income', poupancas: 'subtitles.savings', calendario: 'subtitles.calendar', categorias: 'subtitles.categories', historico: 'subtitles.history' };
+        const map = { resumo: 'subtitles.summary', gastos: 'subtitles.expenses', ganhos: 'subtitles.income', poupancas: 'subtitles.savings', calendario: 'subtitles.calendar', agenda: 'subtitles.agenda', categorias: 'subtitles.agenda', historico: 'subtitles.history' };
         const userLbl = this.currentUser ? ' · ' + this.currentUser : '';
         document.getElementById('subtitle').textContent = t(map[this.screen] || '') + userLbl;
       },
@@ -1891,6 +2008,8 @@
         if (!this.state.financialGoals) { this.state.financialGoals = []; this.save(); }
         if (!this.state.savingsTransfers) { this.state.savingsTransfers = []; this.save(); }
         if (!this.state.categoryBudgets) { this.state.categoryBudgets = {}; this.save(); }
+        if (!this.state.appointments) { this.state.appointments = []; this.save(); }
+        if (!this.state.agendaSettings) { this.state.agendaSettings = { ...DEFAULT_AGENDA_SETTINGS }; this.save(); }
       },
 
       async bootstrap() {
@@ -1942,6 +2061,8 @@
           financialGoals: [],
           savingsTransfers: [],
           categoryBudgets: {},
+          appointments: [],
+          agendaSettings: { ...DEFAULT_AGENDA_SETTINGS },
         };
         this.save();
       },
@@ -1958,6 +2079,7 @@
       },
 
       go(name) {
+        if (name === 'categorias') name = 'agenda';
         this.screen=name;
         document.querySelectorAll('.nav button').forEach(b=>b.classList.toggle('active', b.dataset.screen===name));
         this.updateSubtitle();
@@ -1973,7 +2095,7 @@
       render() {
         document.getElementById('receipt-badge').textContent=this.state.receipts.length;
         const main=document.getElementById('main');
-        const fns={resumo:'renderResumo',gastos:'renderGastos',ganhos:'renderGanhos',poupancas:'renderPoupancas',calendario:'renderCalendario',categorias:'renderCategorias',historico:'renderHistorico'};
+        const fns={resumo:'renderResumo',gastos:'renderGastos',ganhos:'renderGanhos',poupancas:'renderPoupancas',calendario:'renderCalendario',agenda:'renderAgenda',categorias:'renderAgenda',historico:'renderHistorico'};
         main.innerHTML = this[fns[this.screen]]?this[fns[this.screen]]():'';
       },
 
@@ -2308,12 +2430,235 @@
         else this.openForm(kind, null, ds);
       },
 
-      renderCategorias() {
+      getAgendaSettings() {
+        return { ...DEFAULT_AGENDA_SETTINGS, ...(this.state.agendaSettings || {}) };
+      },
+
+      getPendingReminders() {
+        const s = this.getAgendaSettings();
+        return (this.state.appointments || [])
+          .filter(a => needsReminderToday(a, s.reminderDaysBefore))
+          .sort((a, b) => a.startTime.localeCompare(b.startTime));
+      },
+
+      renderAgenda() {
+        const appts = this.state.appointments || [];
+        const s = this.getAgendaSettings();
+        const pending = this.getPendingReminders();
+        const y = this.agYear, m = this.agMonth;
+        const first = new Date(y, m, 1);
+        const last = new Date(y, m + 1, 0);
+        const pad = (first.getDay() + 6) % 7;
+        const days = [];
+        for (let i = 0; i < pad; i++) days.push(null);
+        for (let d = 1; d <= last.getDate(); d++) days.push(new Date(y, m, d));
+        const aptDates = new Set(appts.map(a => a.date));
+        const sel = this.agSelected;
+        const selAppts = appts.filter(a => a.date === sel).sort((a, b) => a.startTime.localeCompare(b.startTime));
+        const monthNames = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
+        const reminderTarget = fmtAptDate(addDaysIso(today(), s.reminderDaysBefore));
+        const banner = pending.length ? `<div class="card" style="background:#fffbeb;border-color:#fde68a;margin-bottom:12px">
+          <div style="font-size:14px;font-weight:600;color:#92400e">🔔 ${pending.length} marcação(ões) para confirmar (${reminderTarget})</div>
+          <div style="font-size:12px;color:#b45309;margin:6px 0 10px">Abre o WhatsApp de cada cliente com a mensagem pronta.</div>
+          <button class="btn-primary" style="background:#b45309" onclick="App.openReminders()">Enviar confirmações (${pending.length})</button>
+        </div>` : '';
+        const calCells = days.map((day, i) => {
+          if (!day) return `<div></div>`;
+          const ds = day.toISOString().slice(0, 10);
+          const has = aptDates.has(ds);
+          const active = ds === sel;
+          const isToday = ds === today();
+          return `<button type="button" onclick="App.selectAgDay('${ds}')" style="aspect-ratio:1;border-radius:12px;border:none;font-size:14px;position:relative;${active?'background:#0f766e;color:#fff':isToday?'background:#f0fdfa;color:#0f766e;font-weight:600':'background:transparent;color:#334155'}">${day.getDate()}${has?`<span style="position:absolute;bottom:4px;left:50%;transform:translateX(-50%);width:4px;height:4px;border-radius:50%;background:${active?'#fff':'#0f766e'}"></span>`:''}</button>`;
+        }).join('');
+        const list = selAppts.length ? selAppts.map(a => {
+          const msg = buildAptMessage(s.messageTemplate, a, s.businessName);
+          const st = APT_STATUS_LABELS[a.status] || a.status;
+          return `<div class="card" style="margin-bottom:10px;padding:14px">
+            <div style="display:flex;justify-content:space-between;gap:8px;align-items:flex-start">
+              <div><div style="font-weight:600">${esc(a.clientName)}</div>
+              <div style="font-size:13px;color:#64748b">${a.startTime}${a.endTime?' – '+a.endTime:''} · ${esc(a.service)}</div>
+              ${a.note?`<div style="font-size:12px;color:#94a3b8;margin-top:4px">${esc(a.note)}</div>`:''}</div>
+              <span style="font-size:10px;font-weight:600;padding:4px 8px;border-radius:999px;background:${APT_STATUS_COLORS[a.status]||'#f1f5f9'}">${st}</span>
+            </div>
+            <div style="display:flex;flex-wrap:gap:8px;margin-top:10px">
+              <button class="btn-secondary" style="background:#059669;color:#fff;border:none" onclick="window.open('${whatsAppUrl(a.clientPhone, msg)}','_blank')">WhatsApp</button>
+              ${a.status!=='confirmed'?`<button class="btn-secondary" onclick="App.setAptStatus('${a.id}','confirmed')">Confirmada</button>`:''}
+              ${a.status!=='cancelled'?`<button class="btn-secondary" style="color:#dc2626" onclick="App.setAptStatus('${a.id}','cancelled')">Cancelada</button>`:''}
+              <button class="btn-icon" onclick="App.openAptForm('${a.id}')">✎</button>
+              <button class="btn-icon del" onclick="App.deleteAppointment('${a.id}')">×</button>
+            </div>
+          </div>`;
+        }).join('') : '<div class="empty">Sem marcações neste dia.</div>';
+        return `<section class="screen active">
+          ${banner}
+          <button class="btn-secondary" onclick="App.openAptForm()">+ Nova marcação</button>
+          <div class="card">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+              <button type="button" class="btn-icon" onclick="App.changeAgMonth(-1)">‹</button>
+              <div style="font-weight:600;text-transform:capitalize">${monthNames[m]} ${y}</div>
+              <button type="button" class="btn-icon" onclick="App.changeAgMonth(1)">›</button>
+            </div>
+            <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:4px;text-align:center;font-size:10px;color:#94a3b8;margin-bottom:4px"><span>S</span><span>T</span><span>Q</span><span>Q</span><span>S</span><span>S</span><span>D</span></div>
+            <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:4px">${calCells}</div>
+          </div>
+          <div class="card">
+            <div style="font-weight:600;margin-bottom:10px;text-transform:capitalize">${fmtDateLong(sel)}</div>
+            ${list}
+          </div>
+        </section>`;
+      },
+
+      changeAgMonth(d) {
+        this.agMonth += d;
+        if (this.agMonth > 11) { this.agMonth = 0; this.agYear++; }
+        if (this.agMonth < 0) { this.agMonth = 11; this.agYear--; }
+        this.render();
+      },
+
+      selectAgDay(ds) {
+        this.agSelected = ds;
+        this.render();
+      },
+
+      openAptForm(id) {
+        this.editingAptId = id || null;
+        const a = id ? (this.state.appointments || []).find(x => x.id === id) : null;
+        document.getElementById('apt-form-title').textContent = a ? 'Editar marcação' : 'Nova marcação';
+        document.getElementById('apt-submit-btn').textContent = 'Guardar';
+        document.getElementById('a-name').value = a ? a.clientName : '';
+        document.getElementById('a-phone').value = a ? a.clientPhone : '';
+        document.getElementById('a-date').value = a ? a.date : (this.agSelected || today());
+        document.getElementById('a-start').value = a ? a.startTime : '10:00';
+        document.getElementById('a-end').value = a ? (a.endTime || '') : '';
+        document.getElementById('a-service').value = a ? a.service : '';
+        document.getElementById('a-note').value = a ? (a.note || '') : '';
+        document.getElementById('apt-overlay').classList.add('open');
+      },
+
+      closeAptForm() {
+        document.getElementById('apt-overlay').classList.remove('open');
+        this.editingAptId = null;
+      },
+
+      submitAppointment(e) {
+        e.preventDefault();
+        const payload = {
+          id: this.editingAptId || uid(),
+          clientName: document.getElementById('a-name').value.trim(),
+          clientPhone: document.getElementById('a-phone').value.trim(),
+          date: document.getElementById('a-date').value,
+          startTime: document.getElementById('a-start').value,
+          endTime: document.getElementById('a-end').value.trim() || undefined,
+          service: document.getElementById('a-service').value.trim(),
+          note: document.getElementById('a-note').value.trim() || undefined,
+          status: 'pending',
+          createdAt: new Date().toISOString(),
+        };
+        if (!payload.clientName || !payload.clientPhone || !payload.service) return;
+        if (!this.state.appointments) this.state.appointments = [];
+        if (this.editingAptId) {
+          const old = this.state.appointments.find(x => x.id === this.editingAptId);
+          if (old) {
+            payload.status = old.status;
+            payload.reminderSentAt = old.reminderSentAt;
+            payload.createdAt = old.createdAt;
+            const idx = this.state.appointments.findIndex(x => x.id === this.editingAptId);
+            this.state.appointments[idx] = payload;
+          }
+        } else {
+          this.state.appointments.push(payload);
+        }
+        this.save();
+        this.closeAptForm();
+        this.agSelected = payload.date;
+        this.toast('Marcação guardada');
+        this.render();
+      },
+
+      async deleteAppointment(id) {
+        const a = (this.state.appointments || []).find(x => x.id === id);
+        if (!a) return;
+        if (!(await this.confirm('Eliminar marcação de ' + a.clientName + '?'))) return;
+        this.state.appointments = (this.state.appointments || []).filter(x => x.id !== id);
+        this.save();
+        this.toast('Marcação eliminada');
+        this.render();
+      },
+
+      setAptStatus(id, status, reminderSentAt) {
+        const a = (this.state.appointments || []).find(x => x.id === id);
+        if (!a) return;
+        a.status = status;
+        if (reminderSentAt) a.reminderSentAt = reminderSentAt;
+        this.save();
+        this.render();
+        if (document.getElementById('reminders-overlay').classList.contains('open')) this.renderReminderStep();
+      },
+
+      openReminders() {
+        this.reminderQueue = this.getPendingReminders();
+        this.reminderIndex = 0;
+        if (!this.reminderQueue.length) return;
+        this.renderReminderStep();
+        document.getElementById('reminders-overlay').classList.add('open');
+      },
+
+      closeReminders() {
+        document.getElementById('reminders-overlay').classList.remove('open');
+        this.reminderQueue = [];
+        this.reminderIndex = 0;
+        this.render();
+      },
+
+      renderReminderStep() {
+        const s = this.getAgendaSettings();
+        const q = this.reminderQueue;
+        const i = this.reminderIndex;
+        const body = document.getElementById('reminders-body');
+        if (!q.length || i >= q.length) {
+          body.innerHTML = '<div class="empty">Concluído!</div>';
+          setTimeout(() => this.closeReminders(), 800);
+          return;
+        }
+        const a = q[i];
+        const msg = buildAptMessage(s.messageTemplate, a, s.businessName);
+        body.innerHTML = `<p style="text-align:center;font-size:12px;color:#64748b">${i+1} de ${q.length}</p>
+          <div class="card"><div style="font-weight:600">${esc(a.clientName)}</div>
+          <div style="font-size:13px;color:#64748b;margin-top:4px">${fmtAptDate(a.date)} · ${a.startTime} · ${esc(a.service)}</div>
+          <div style="font-size:12px;color:#94a3b8;margin-top:4px">${esc(a.clientPhone)}</div></div>
+          <div class="card" style="font-size:13px;white-space:pre-wrap">${esc(msg)}</div>
+          <button class="btn-primary" onclick="window.open('${whatsAppUrl(a.clientPhone, msg)}','_blank')">Abrir WhatsApp</button>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px">
+            <button class="btn-secondary" onclick="App.setAptStatus('${a.id}','sent','${new Date().toISOString()}');App.nextReminder()">Marcar enviada</button>
+            <button class="btn-secondary" onclick="App.nextReminder()">Saltar</button>
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px">
+            <button class="btn-secondary" style="color:#047857" onclick="App.setAptStatus('${a.id}','confirmed');App.nextReminder()">Confirmada</button>
+            <button class="btn-secondary" style="color:#dc2626" onclick="App.setAptStatus('${a.id}','cancelled');App.nextReminder()">Cancelada</button>
+          </div>`;
+      },
+
+      nextReminder() {
+        this.reminderIndex++;
+        this.renderReminderStep();
+      },
+
+      openCategoriesSettings() {
+        this.closeSettings();
+        this.renderCategoriesSettings();
+        document.getElementById('categories-settings-overlay').classList.add('open');
+      },
+
+      closeCategoriesSettings() {
+        document.getElementById('categories-settings-overlay').classList.remove('open');
+      },
+
+      renderCategoriesSettings() {
         const groups=[{title:'Pessoais',scope:'personal',budget:true},{title:'Profissionais',scope:'professional',budget:true},{title:'Ganhos',scope:'income',budget:false}];
         const budgets = this.state.categoryBudgets || {};
-        return `<section class="screen active">
+        document.getElementById('categories-settings-body').innerHTML = `
           <button class="btn-secondary" onclick="App.openCatForm()">+ Nova Categoria</button>
-          <div class="card" style="padding:0 16px">
+          <div class="card" style="padding:0 16px;margin-top:12px">
             ${groups.map(g=>`
               <div class="section-title">${g.title}</div>
               ${this.state.categories.filter(c=>c.scope===g.scope).map(c=>{
@@ -2332,19 +2677,23 @@
                     </div>
                   </div>
                   ${g.budget ? `<div class="budget-row">
-                    <div class="budget-field">
-                      <label>Gasto/mês €</label>
-                      <span class="budget-spent ${metaCls}">${fmt(spent)}</span>
-                    </div>
-                    <div class="budget-field">
-                      <label>Orçamento/mês €</label>
-                      <input class="budget-input" type="number" min="0" value="${limit||''}" placeholder="—" onchange="App.setCategoryBudget('${c.id}', this.value)" />
-                    </div>
+                    <div class="budget-field"><label>Gasto/mês €</label><span class="budget-spent ${metaCls}">${fmt(spent)}</span></div>
+                    <div class="budget-field"><label>Orçamento/mês €</label><input class="budget-input" type="number" min="0" value="${limit||''}" placeholder="—" onchange="App.setCategoryBudget('${c.id}', this.value)" /></div>
                   </div>${limit>0?`<div class="budget-meta ${metaCls}">${pct}% do orçamento${spent>=limit?' · Orçamento ultrapassado':''}</div>`:''}` : ''}
                 </div>`;}).join('')}
             `).join('')}
-          </div>
-        </section>`;
+          </div>`;
+      },
+
+      saveAgendaSettings() {
+        const days = parseInt(document.getElementById('ag-days')?.value || '1', 10);
+        this.state.agendaSettings = {
+          reminderDaysBefore: Math.max(0, isNaN(days) ? 1 : days),
+          businessName: document.getElementById('ag-business')?.value?.trim() || '',
+          messageTemplate: document.getElementById('ag-template')?.value?.trim() || DEFAULT_AGENDA_SETTINGS.messageTemplate,
+        };
+        this.save();
+        this.toast('Definições da agenda guardadas');
       },
 
       toggleFab() {
@@ -2419,9 +2768,31 @@
         }
         const sg = this.state.savingsGoal || DEFAULT_SAVINGS;
         const saveAmt = Math.round(amount * sg.percent) / 100;
-        document.getElementById('f-savings-lbl').textContent = `🐷 Poupança sugerida (${sg.percent}%)`;
-        document.getElementById('f-savings-amount').value = String(saveAmt).replace('.', ',');
-        document.getElementById('f-savings-hint').textContent = `Guardar deste ganho (${fmt(amount)})`;
+        const dateIso = this.getDateInputIso('f-date');
+        const catId = document.getElementById('f-category').value;
+        const label = savingsLabelForIncome(catId, '');
+        const transfers = this.state.savingsTransfers || [];
+        const done = isSuggestedSavingsDone(transfers, {
+          transactionId: this.editingTxId,
+          date: dateIso,
+          saveAmt,
+          label,
+        });
+        const card = box.querySelector('.form-savings-card');
+        const btn = box.querySelector('.detail-savings-btn');
+        const lbl = document.getElementById('f-savings-lbl');
+        const amtInput = document.getElementById('f-savings-amount');
+        const hint = document.getElementById('f-savings-hint');
+        lbl.textContent = `🐷 Poupança sugerida (${sg.percent}%)${done ? ' ✓' : ''}`;
+        amtInput.value = String(saveAmt).replace('.', ',');
+        amtInput.disabled = done;
+        hint.textContent = done ? 'Poupança já registada para este ganho' : `Guardar deste ganho (${fmt(amount)})`;
+        if (card) card.classList.toggle('done', done);
+        if (btn) {
+          btn.textContent = done ? '✓ Poupança guardada' : 'Guardar poupança neste dia';
+          btn.classList.toggle('done', done);
+          btn.disabled = done;
+        }
         box.hidden = false;
       },
 
@@ -2432,17 +2803,18 @@
         const dateIso = this.getDateInputIso('f-date');
         if (!dateIso) { this.toast('Data inválida — usa dd/mm/aaaa'); return; }
         const catId = document.getElementById('f-category').value;
-        const c = cat(catId);
-        const label = c?.name || 'Ganho';
+        const label = savingsLabelForIncome(catId, '');
         if (!this.state.savingsTransfers) this.state.savingsTransfers = [];
         this.state.savingsTransfers.unshift({
           id: uid(), amount,
           date: dateIso,
           note: `Poupança — ${label}`,
+          sourceTransactionId: this.editingTxId || undefined,
           createdAt: new Date().toISOString(),
         });
         this.save();
         this.toast('Poupança guardada');
+        this.updateFormSavingsSuggest();
         this.render();
       },
 
@@ -2566,11 +2938,20 @@
         if (isInc) {
           const sg = App.state.savingsGoal || DEFAULT_SAVINGS;
           const saveAmt = Math.round(t.amount * sg.percent) / 100;
-          html += `<div class="detail-savings">
-            <div class="lbl">🐷 Poupança recomendada (${sg.percent}%)</div>
+          const label = savingsLabelForIncome(t.categoryId, t.description);
+          const savingsDone = isSuggestedSavingsDone(App.state.savingsTransfers || [], {
+            transactionId: t.id,
+            date: t.date,
+            saveAmt,
+            label,
+          });
+          html += `<div class="detail-savings${savingsDone ? ' done' : ''}">
+            <div class="lbl">🐷 Poupança recomendada (${sg.percent}%)${savingsDone ? ' <span class="savings-done-mark">✓</span>' : ''}</div>
             <div class="amount">${fmt(saveAmt)}</div>
-            <div class="hint">Guardar deste ganho (${fmt(t.amount)})</div>
-            <button type="button" class="detail-savings-btn" onclick="App.saveSavingsFromDetail()">Guardar poupança deste ganho</button>
+            <div class="hint">${savingsDone ? 'Poupança já registada para este ganho' : `Guardar deste ganho (${fmt(t.amount)})`}</div>
+            ${savingsDone
+              ? '<div class="savings-done-msg">✓ Poupança guardada</div>'
+              : '<button type="button" class="detail-savings-btn" onclick="App.saveSavingsFromDetail()">Guardar poupança deste ganho</button>'}
           </div>`;
         }
 
@@ -2748,6 +3129,22 @@
               <div class="settings-row"><span style="font-size:14px">🌙 ${t('settings.darkMode')}</span>${toggle('darkMode', prefs.darkMode)}</div>
             </div>
           </section>
+          ${loggedIn ? `<section class="settings-section">
+            <h3 class="settings-section-title">Editar categorias</h3>
+            <div class="settings-group">
+              <button type="button" class="settings-row clickable" onclick="App.openCategoriesSettings()">📁 Editar categorias</button>
+            </div>
+          </section>
+          <section class="settings-section">
+            <h3 class="settings-section-title">Agenda e WhatsApp</h3>
+            <div class="settings-group" style="padding:14px 16px">
+              <div class="field"><label>Dias de antecedência</label><input type="number" min="0" max="7" id="ag-days" value="${this.getAgendaSettings().reminderDaysBefore}" /></div>
+              <div class="field"><label>Nome profissional</label><input type="text" id="ag-business" placeholder="Ex: Venusia Francisco" value="${esc(this.getAgendaSettings().businessName)}" /></div>
+              <div class="field"><label>Mensagem de confirmação</label><textarea id="ag-template" rows="4" style="width:100%;padding:10px;border:1px solid #e2e8f0;border-radius:12px;font-size:14px">${esc(this.getAgendaSettings().messageTemplate)}</textarea>
+              <p style="font-size:11px;color:#94a3b8;margin-top:6px">Variáveis: {cliente}, {data}, {hora}, {servico}, {profissional}</p></div>
+              <button type="button" class="btn-primary" style="width:100%;margin-top:8px" onclick="App.saveAgendaSettings()">Guardar</button>
+            </div>
+          </section>` : ''}
           ${dataSection}
           <section class="settings-section">
             <h3 class="settings-section-title">${t('settings.about')}</h3>
@@ -2774,7 +3171,7 @@
         this.closeSettings();
         this.currentUser = null;
         setSessionUser(null);
-        this.state = { transactions: [], categories: [], receipts: [], recurring: [], savingsTransfers: [], categoryBudgets: {} };
+        this.state = { transactions: [], categories: [], receipts: [], recurring: [], savingsTransfers: [], categoryBudgets: {}, appointments: [], agendaSettings: { ...DEFAULT_AGENDA_SETTINGS } };
         document.getElementById('login-screen').classList.remove('hidden');
         document.getElementById('login-user').value = '';
         document.getElementById('login-pass').value = '';
@@ -2796,6 +3193,8 @@
           recurring: this.state.recurring,
           savingsTransfers: this.state.savingsTransfers || [],
           categoryBudgets: this.state.categoryBudgets || {},
+          appointments: this.state.appointments || [],
+          agendaSettings: this.state.agendaSettings || { ...DEFAULT_AGENDA_SETTINGS },
         };
         const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
         const url = URL.createObjectURL(blob);
@@ -2823,7 +3222,10 @@
             recurring: payload.recurring || [],
             savingsTransfers: payload.savingsTransfers || [],
             categoryBudgets: payload.categoryBudgets || {},
+            appointments: payload.appointments || [],
+            agendaSettings: payload.agendaSettings || { ...DEFAULT_AGENDA_SETTINGS },
           };
+          this.ensureStateFields();
           this.save();
           this.toast(t('settings.importDone'));
           this.render();
@@ -2949,10 +3351,19 @@
         if (!t || t.type !== 'income') return;
         const sg = this.state.savingsGoal || DEFAULT_SAVINGS;
         const saveAmt = Math.round(t.amount * sg.percent) / 100;
-        const c = cat(t.categoryId);
-        const label = t.description || c?.name || 'Ganho';
-        this.closeTxDetail();
-        this.openSavingsTransfer(t.date, saveAmt, `Poupança — ${label}`);
+        const label = savingsLabelForIncome(t.categoryId, t.description);
+        if (!this.state.savingsTransfers) this.state.savingsTransfers = [];
+        this.state.savingsTransfers.unshift({
+          id: uid(),
+          amount: saveAmt,
+          date: t.date,
+          note: `Poupança — ${label}`,
+          sourceTransactionId: t.id,
+          createdAt: new Date().toISOString(),
+        });
+        this.save();
+        this.toast('Poupança guardada');
+        this.openTxDetail(t.id);
       },
 
       closeSavingsTransfer() {
@@ -3079,6 +3490,7 @@
           this.toast('Categoria criada');
         }
         this.save(); this.closeCatForm(); this.render();
+        if (document.getElementById('categories-settings-overlay')?.classList.contains('open')) this.renderCategoriesSettings();
       },
 
       async deleteCategory(id) {
@@ -3092,6 +3504,7 @@
         if(!(await this.confirm(`Eliminar categoria "${c.name}"?`))) return;
         this.state.categories=this.state.categories.filter(x=>x.id!==id);
         this.save(); this.toast('Categoria eliminada'); this.render();
+        if (document.getElementById('categories-settings-overlay')?.classList.contains('open')) this.renderCategoriesSettings();
       },
 
       setRecurringScope(s) {
