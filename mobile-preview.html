@@ -175,7 +175,8 @@
     html.dark-mode .contact-sug-item:active { background: var(--dm-surface-2) !important; }
     html.dark-mode .contact-sug-name { color: var(--dm-text) !important; }
     html.dark-mode .contact-sug-phone { color: var(--dm-muted) !important; }
-    html.dark-mode .btn-import-contacts { background: rgba(20,184,166,.15) !important; border-color: var(--dm-brand) !important; color: var(--dm-accent) !important; }
+    html.dark-mode .btn-import-contacts,
+    html.dark-mode .btn-paste-phone { background: rgba(20,184,166,.15) !important; border-color: var(--dm-brand) !important; color: var(--dm-accent) !important; }
     html.dark-mode .field input,
     html.dark-mode .field select,
     html.dark-mode .field textarea,
@@ -486,6 +487,13 @@
     .btn-import-contacts:active { background: #ccfbf1; }
     .contact-hint, .contact-import-msg { font-size: 11px; color: #94a3b8; margin: 6px 0 0; }
     .contact-import-msg { color: #0f766e; margin-bottom: 8px; }
+    .phone-field-row { display: flex; gap: 8px; align-items: stretch; }
+    .phone-field-row input { flex: 1; min-width: 0; }
+    .btn-paste-phone { flex-shrink: 0; padding: 11px 14px; border: 1px solid #99f6e4; border-radius: 12px; background: #f0fdfa; color: #0f766e; font-size: 13px; font-weight: 600; cursor: pointer; font-family: inherit; white-space: nowrap; }
+    .btn-paste-phone:active { background: #ccfbf1; }
+    .paste-phone-msg { font-size: 11px; color: #94a3b8; margin: 6px 0 0; }
+    .paste-phone-msg.ok { color: #0f766e; }
+    .paste-phone-msg.err { color: #b45309; }
     .type-toggle { display: flex; gap: 8px; }
     .type-toggle button { flex: 1; padding: 10px; border: 1px solid #e2e8f0; border-radius: 12px; background: white; font-size: 13px; font-weight: 500; cursor: pointer; color: #64748b; }
     .type-toggle button.active { border-color: #0f766e; background: #f0fdfa; color: #0f766e; }
@@ -959,7 +967,14 @@
           </div>
           <button type="button" class="btn-import-contacts" id="a-import-contacts" onclick="App.importAptContacts()">📇 Permitir contactos do telemóvel</button>
           <p class="contact-import-msg" id="a-import-msg"></p>
-          <div class="field"><label>Telemóvel / WhatsApp</label><input type="tel" id="a-phone" required placeholder="Preenchido ao escolher contacto" /></div>
+          <div class="field">
+            <label>Telemóvel / WhatsApp</label>
+            <div class="phone-field-row">
+              <input type="tel" id="a-phone" required placeholder="Preenchido ao escolher contacto" />
+              <button type="button" class="btn-paste-phone" onclick="App.pasteAptPhone()">📋 Colar</button>
+            </div>
+            <p class="paste-phone-msg" id="a-paste-msg">Copia o número no WhatsApp e toca Colar.</p>
+          </div>
           <div class="field"><label>Data</label><input type="date" id="a-date" required /></div>
           <div class="field" style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
             <div><label>Início</label><input type="time" id="a-start" required value="10:00" /></div>
@@ -1182,7 +1197,7 @@
       { id:'other-income', name:'Outros ganhos', icon:'💵', color:'#6ee7b7', scope:'income' },
     ];
 
-    const APP_VERSION = '1.3.4';
+    const APP_VERSION = '1.3.5';
     const DEFAULT_AGENDA_SETTINGS = {
       reminderDaysBefore: 1,
       businessName: '',
@@ -3035,6 +3050,50 @@
         if (btn) btn.style.display = (supports && this.getAllClientContacts().length < 3) ? '' : 'none';
       },
 
+      formatPastedPhone(raw) {
+        const digits = (raw || '').replace(/\D/g, '');
+        if (!digits) return '';
+        if (digits.startsWith('351') && digits.length >= 12) return digits.slice(3, 12);
+        if (digits.length === 9 && digits.startsWith('9')) return digits;
+        if (digits.length > 9) {
+          const last9 = digits.slice(-9);
+          if (last9.startsWith('9')) return last9;
+        }
+        return digits;
+      },
+
+      setPastePhoneMsg(text, type) {
+        const el = document.getElementById('a-paste-msg');
+        if (!el) return;
+        el.textContent = text;
+        el.className = 'paste-phone-msg' + (type ? ' ' + type : '');
+      },
+
+      async pasteAptPhone() {
+        const input = document.getElementById('a-phone');
+        try {
+          let text = '';
+          if (navigator.clipboard && navigator.clipboard.readText) {
+            text = await navigator.clipboard.readText();
+          }
+          if (!text || !text.trim()) {
+            this.setPastePhoneMsg('Copia o número no WhatsApp e toca Colar.', 'err');
+            input.focus();
+            return;
+          }
+          const phone = this.formatPastedPhone(text);
+          if (!phone || phone.length < 9) {
+            this.setPastePhoneMsg('Não encontrámos um número válido no texto copiado.', 'err');
+            return;
+          }
+          input.value = phone;
+          this.setPastePhoneMsg('Número colado ✓', 'ok');
+        } catch (e) {
+          input.focus();
+          this.setPastePhoneMsg('Toca no campo e usa «Colar» do teclado, ou volta a tocar em Colar.', 'err');
+        }
+      },
+
       async importAptContacts() {
         const msg = document.getElementById('a-import-msg');
         if (!('contacts' in navigator && 'ContactsManager' in window)) {
@@ -3077,6 +3136,7 @@
         document.getElementById('a-note').value = a ? (a.note || '') : '';
         const sug = document.getElementById('a-name-suggestions');
         if (sug) { sug.innerHTML = ''; sug.classList.remove('open'); }
+        this.setPastePhoneMsg('Copia o número no WhatsApp e toca Colar.');
         this.updateAptContactUi();
         document.getElementById('apt-overlay').classList.add('open');
       },
