@@ -424,6 +424,7 @@
     .tx-amount.income { color: #059669; }
     .tag { font-size: 9px; font-weight: 700; text-transform: uppercase; padding: 2px 5px; border-radius: 4px; background: #eff6ff; color: #2563eb; margin-left: 4px; }
     .tag.fixo { background: #f0fdfa; color: #0f766e; }
+    .tag.family { background: #ede9fe; color: #6d28d9; }
     .btn-del { border: none; background: none; color: #cbd5e1; font-size: 16px; cursor: pointer; padding: 4px; line-height: 1; }
     .btn-del:hover { color: #ef4444; }
     .nav { position: fixed; bottom: 0; left: 50%; transform: translateX(-50%); width: 100%; max-width: 430px; background: white; border-top: 1px solid #f1f5f9; display: flex; padding-bottom: env(safe-area-inset-bottom, 8px); z-index: 20; }
@@ -840,6 +841,11 @@
             <label>Categoria</label>
             <select id="f-category" onchange="App.updateFormSavingsSuggest()"></select>
           </div>
+          <div class="field" id="f-paidby-wrap" hidden>
+            <label>Quem pagou?</label>
+            <select id="f-paidby"></select>
+            <p class="field-hint">Regista quem pagou por ti (ex.: mãe, avó)</p>
+          </div>
           <div class="field">
             <label>Nota</label>
             <textarea id="f-note" rows="3" placeholder="Observações, detalhes extra..."></textarea>
@@ -1234,7 +1240,7 @@
       { id:'other-income', name:'Outros ganhos', icon:'💵', color:'#6ee7b7', scope:'income' },
     ];
 
-    const APP_VERSION = '1.3.7';
+    const APP_VERSION = '1.3.8';
     const DEFAULT_AGENDA_SETTINGS = {
       reminderDaysBefore: 1,
       businessName: '',
@@ -1467,6 +1473,8 @@
     function today() { return new Date().toISOString().slice(0,10); }
     function sum(arr) { return arr.reduce((a,t)=>a+t.amount,0); }
     function cat(id) { return App.state.categories.find(c=>c.id===id); }
+    function familyPayer(id) { return (App.state.familyPayers || []).find(p => p.id === id); }
+    function isFamilyExpenseMode() { return !!App.state.familyExpenseMode; }
 
     function periodRange(period, ref=new Date()) {
       const s = new Date(ref), e = new Date(ref);
@@ -1552,9 +1560,11 @@
       const isInc = t.type==='income';
       const fixo = t.isRecurring ? '<span class="tag fixo">Fixo</span>' : '';
       const prof = t.scope==='professional' ? '<span class="tag">Prof.</span>' : '';
+      const payer = t.paidById ? familyPayer(t.paidById) : null;
+      const family = payer ? `<span class="tag family">${esc(payer.name)}</span>` : '';
       const sub = showDate
-        ? `${fmtDate(t.date)}${t.location?' · '+t.location:''} ${fixo}${prof}`
-        : `${t.location||c.name} ${fixo}${prof}`;
+        ? `${fmtDate(t.date)}${t.location?' · '+t.location:''} ${fixo}${prof}${family}`
+        : `${t.location||c.name} ${fixo}${prof}${family}`;
       const action = t.isRecurring
         ? `<button class="btn-icon" onclick="event.stopPropagation();App.openRecurringForm('${t.recurringId}')" title="Editar">✎</button>`
         : `<button class="btn-del" onclick="event.stopPropagation();App.deleteTx('${t.id}')" title="Eliminar">×</button>`;
@@ -2443,6 +2453,8 @@
         if (!this.state.categoryBudgets) { this.state.categoryBudgets = {}; this.save(); }
         if (!this.state.appointments) { this.state.appointments = []; this.save(); }
         if (!this.state.agendaSettings) { this.state.agendaSettings = { ...DEFAULT_AGENDA_SETTINGS }; this.save(); }
+        if (this.state.familyExpenseMode === undefined) { this.state.familyExpenseMode = false; this.save(); }
+        if (!this.state.familyPayers) { this.state.familyPayers = []; this.save(); }
       },
 
       async bootstrap() {
@@ -2496,6 +2508,8 @@
           categoryBudgets: {},
           appointments: [],
           agendaSettings: { ...DEFAULT_AGENDA_SETTINGS },
+          familyExpenseMode: false,
+          familyPayers: [],
         };
         this.save();
       },
@@ -3580,8 +3594,23 @@
         }
 
         this.fillFormCategories(type, editing?.categoryId);
+        this.updateFormPaidBy(editing?.paidById);
         this.updateFormSavingsSuggest();
         document.getElementById('form-overlay').classList.add('open');
+      },
+
+      updateFormPaidBy(selectedId) {
+        const wrap = document.getElementById('f-paidby-wrap');
+        const sel = document.getElementById('f-paidby');
+        if (!wrap || !sel) return;
+        const on = this.formType === 'expense' && isFamilyExpenseMode();
+        wrap.hidden = !on;
+        if (!on) return;
+        const payers = this.state.familyPayers || [];
+        sel.innerHTML = `<option value="">Eu / próprio</option>${
+          payers.map(p => `<option value="${p.id}">${esc(p.name)}</option>`).join('')
+        }`;
+        sel.value = selectedId && payers.some(p => p.id === selectedId) ? selectedId : '';
       },
 
       updateFormSavingsSuggest() {
@@ -3711,6 +3740,15 @@
           scope,
           receiptId:this.pendingReceiptId||undefined,
         };
+        if (this.formType === 'expense') {
+          if (isFamilyExpenseMode()) {
+            const paidById = document.getElementById('f-paidby')?.value || '';
+            if (paidById) tx.paidById = paidById;
+          } else if (this.editingTxId) {
+            const prev = this.state.transactions.find(t => t.id === this.editingTxId);
+            if (prev?.paidById) tx.paidById = prev.paidById;
+          }
+        }
         if (this.editingTxId) {
           const idx = this.state.transactions.findIndex(t => t.id === this.editingTxId);
           if (idx >= 0) this.state.transactions[idx] = tx;
@@ -3761,6 +3799,7 @@
           <div class="detail-field"><div class="lbl">Data</div><div class="val">${fmtDateLong(t.date)}</div></div>
           <div class="detail-field"><div class="lbl">Tipo</div><div class="val">${tipo}</div></div>
           ${t.isRecurring ? '<div class="detail-field"><div class="lbl">Gasto fixo</div><div class="val">Sim — mensal</div></div>' : ''}
+          ${!isInc && t.paidById ? `<div class="detail-field"><div class="lbl">Quem pagou</div><div class="val">${esc((familyPayer(t.paidById) || {}).name || '—')}</div></div>` : ''}
           ${t.location ? `<div class="detail-field"><div class="lbl">Local</div><div class="val">${esc(t.location)}</div></div>` : ''}
         </div>
         ${t.note ? `<div class="detail-note"><div class="lbl">Nota</div><div class="val">${esc(t.note)}</div></div>` : ''}`;
@@ -4157,6 +4196,31 @@
             </div>
           </section>
           ${loggedIn ? `<section class="settings-section">
+            <h3 class="settings-section-title">Modo menor / gastos da família</h3>
+            <div class="settings-group">
+              <div class="settings-row">
+                <div>
+                  <p style="font-size:14px;font-weight:500;margin:0">Registar quem pagou por mim</p>
+                  <p style="font-size:12px;color:#64748b;margin:4px 0 0">Para menores — mãe, avó, etc. Ao adicionar ou editar um gasto escolhes quem pagou.</p>
+                </div>
+                <button type="button" class="toggle${this.state.familyExpenseMode ? ' on' : ''}" role="switch" aria-checked="${!!this.state.familyExpenseMode}" onclick="App.toggleFamilyExpenseMode()"></button>
+              </div>
+              ${this.state.familyExpenseMode ? `
+              <div style="padding:12px 16px;border-top:1px solid #f1f5f9">
+                <p style="font-size:13px;font-weight:500;margin:0 0 8px">Quem pode pagar (cria os nomes)</p>
+                ${(this.state.familyPayers || []).map(p => `
+                  <div class="settings-row" style="padding:10px 0">
+                    <span style="font-size:14px">👪 ${esc(p.name)}</span>
+                    <button type="button" class="btn-icon del" onclick="App.deleteFamilyPayer('${p.id}')" title="Eliminar">×</button>
+                  </div>`).join('') || '<p style="font-size:12px;color:#94a3b8;margin:0 0 8px">Ainda sem nomes — adiciona abaixo.</p>'}
+                <div style="display:flex;gap:8px;margin-top:8px">
+                  <input type="text" id="new-family-payer" placeholder="Ex: Mãe, Avó, Pai..." style="flex:1;padding:10px 12px;border:1px solid #e2e8f0;border-radius:12px;font-size:14px" />
+                  <button type="button" class="btn-secondary" style="white-space:nowrap" onclick="App.addFamilyPayer()">+ Adicionar</button>
+                </div>
+              </div>` : ''}
+            </div>
+          </section>
+          <section class="settings-section">
             <h3 class="settings-section-title">Editar categorias</h3>
             <div class="settings-group">
               <button type="button" class="settings-row clickable" onclick="App.openCategoriesSettings()">📁 Editar categorias</button>
@@ -4221,11 +4285,45 @@
         this.renderSettings();
       },
 
+      toggleFamilyExpenseMode() {
+        this.state.familyExpenseMode = !this.state.familyExpenseMode;
+        if (!this.state.familyPayers) this.state.familyPayers = [];
+        this.save();
+        this.renderSettings();
+        this.toast(this.state.familyExpenseMode ? 'Modo família ativado' : 'Modo família desativado');
+      },
+
+      addFamilyPayer() {
+        const input = document.getElementById('new-family-payer');
+        const name = (input?.value || '').trim();
+        if (!name) { this.toast('Escreve um nome'); return; }
+        if (!this.state.familyPayers) this.state.familyPayers = [];
+        if (this.state.familyPayers.some(p => p.name.toLowerCase() === name.toLowerCase())) {
+          this.toast('Este nome já existe');
+          return;
+        }
+        this.state.familyPayers.push({ id: uid(), name });
+        this.save();
+        if (input) input.value = '';
+        this.renderSettings();
+        this.toast('Nome adicionado');
+      },
+
+      async deleteFamilyPayer(id) {
+        const p = (this.state.familyPayers || []).find(x => x.id === id);
+        if (!p || !(await this.confirm(`Eliminar "${p.name}"?`))) return;
+        this.state.familyPayers = (this.state.familyPayers || []).filter(x => x.id !== id);
+        this.state.transactions.forEach(t => { if (t.paidById === id) delete t.paidById; });
+        this.save();
+        this.renderSettings();
+        this.toast('Nome eliminado');
+      },
+
       signOut() {
         this.closeSettings();
         this.currentUser = null;
         setSessionUser(null);
-        this.state = { transactions: [], categories: [], receipts: [], recurring: [], savingsTransfers: [], categoryBudgets: {}, appointments: [], agendaSettings: { ...DEFAULT_AGENDA_SETTINGS } };
+        this.state = { transactions: [], categories: [], receipts: [], recurring: [], savingsTransfers: [], categoryBudgets: {}, appointments: [], agendaSettings: { ...DEFAULT_AGENDA_SETTINGS }, familyExpenseMode: false, familyPayers: [] };
         document.getElementById('login-screen').classList.remove('hidden');
         document.getElementById('login-user').value = '';
         document.getElementById('login-pass').value = '';
@@ -4249,6 +4347,8 @@
           categoryBudgets: this.state.categoryBudgets || {},
           appointments: this.state.appointments || [],
           agendaSettings: this.state.agendaSettings || { ...DEFAULT_AGENDA_SETTINGS },
+          familyExpenseMode: !!this.state.familyExpenseMode,
+          familyPayers: this.state.familyPayers || [],
         };
         const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
         const url = URL.createObjectURL(blob);
@@ -4278,6 +4378,8 @@
             categoryBudgets: payload.categoryBudgets || {},
             appointments: payload.appointments || [],
             agendaSettings: payload.agendaSettings || { ...DEFAULT_AGENDA_SETTINGS },
+            familyExpenseMode: !!payload.familyExpenseMode,
+            familyPayers: payload.familyPayers || [],
           };
           this.ensureStateFields();
           this.save();
