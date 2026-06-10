@@ -464,6 +464,11 @@
     .screen.active { display: block; }
     .overlay { display: none; position: fixed; inset: 0; background: rgba(15,23,42,.45); z-index: 50; align-items: flex-end; justify-content: center; }
     #settings-overlay { z-index: 10002; }
+    #family-history-overlay { z-index: 10003; }
+    .compare-chart .family-bars { flex-direction: column-reverse; align-items: center; gap: 1px; }
+    .compare-chart .family-bars .mbar { width: 70%; min-width: 10px; background: #7c3aed; }
+    .compare-legend.family-legend { flex-wrap: wrap; gap: 8px 12px; }
+    .compare-legend.family-legend .fam-dot { display: inline-block; width: 8px; height: 8px; border-radius: 2px; margin-right: 4px; vertical-align: middle; }
     .overlay.open { display: flex; }
     .overlay.center { align-items: center; padding: 16px; }
     .sheet { background: white; width: 100%; max-width: 430px; max-height: 90vh; border-radius: 24px 24px 0 0; overflow: hidden; display: flex; flex-direction: column; }
@@ -972,6 +977,16 @@
     </div>
   </div>
 
+  <div class="overlay" id="family-history-overlay" onclick="if(event.target===this)App.closeFamilyHistory()">
+    <div class="sheet">
+      <div class="sheet-header">
+        <h2>Histórico da família</h2>
+        <button class="sheet-close" onclick="App.closeFamilyHistory()">×</button>
+      </div>
+      <div class="sheet-body" id="family-history-body"></div>
+    </div>
+  </div>
+
   <input type="file" id="vcf-import-input" accept=".vcf,text/vcard,text/x-vcard" style="display:none" onchange="App.handleVcfImport(event)" />
 
   <div class="overlay" id="client-picker-overlay" onclick="if(event.target===this)App.closeClientPicker()">
@@ -1240,7 +1255,7 @@
       { id:'other-income', name:'Outros ganhos', icon:'💵', color:'#6ee7b7', scope:'income' },
     ];
 
-    const APP_VERSION = '1.3.9';
+    const APP_VERSION = '1.4.0';
     const DEFAULT_AGENDA_SETTINGS = {
       reminderDaysBefore: 1,
       businessName: '',
@@ -1509,6 +1524,112 @@
         <div style="padding:10px 0;font-size:12px;color:#64748b">${items.length} movimento${items.length === 1 ? '' : 's'}</div>
         ${items.map(t => txRow(t)).join('')}
       </div>`;
+    }
+
+    const FAMILY_PAYER_COLORS = ['#7c3aed', '#6d28d9', '#8b5cf6', '#a78bfa', '#5b21b6', '#c4b5fd'];
+    function familyPayerTotal(payerId, period, ref) {
+      return sum(getFamilyPaidExpenses(period, ref).filter(t => t.paidById === payerId));
+    }
+    function familyTotalSpent(period, ref = new Date()) {
+      return sum(getFamilyPaidExpenses(period, ref));
+    }
+    function familyPeriodRef(period, offset = 0) {
+      const now = new Date();
+      if (period === 'year') return new Date(now.getFullYear() + offset, 0, 1);
+      return new Date(now.getFullYear(), now.getMonth() + offset, 1);
+    }
+    function familyPeriodLabel(period, ref) {
+      if (period === 'year') return String(ref.getFullYear());
+      return fmtDate(ref.toISOString().slice(0, 10));
+    }
+    function familyHistoryPeriodTabs(current) {
+      return LIST_PERIOD_TABS.map(([k, l]) =>
+        `<button type="button" class="${current === k ? 'active' : ''}" onclick="App.setFamilyHistoryPeriod('${k}', this)">${l}</button>`
+      ).join('');
+    }
+    function familyHistoryChartData(period) {
+      const now = new Date();
+      const payers = App.state.familyPayers || [];
+      const history = [];
+      if (period === 'month') {
+        for (let i = 4; i >= 0; i--) {
+          const ref = new Date(now.getFullYear(), now.getMonth() - i, 1);
+          const byPayer = {};
+          payers.forEach(p => { byPayer[p.id] = familyPayerTotal(p.id, 'month', ref); });
+          history.push({ label: fmtDate(ref.toISOString().slice(0, 10)), byPayer, total: familyTotalSpent('month', ref) });
+        }
+      } else {
+        for (let i = 4; i >= 0; i--) {
+          const ref = new Date(now.getFullYear() - i, 0, 1);
+          const byPayer = {};
+          payers.forEach(p => { byPayer[p.id] = familyPayerTotal(p.id, 'year', ref); });
+          history.push({ label: String(ref.getFullYear()), byPayer, total: familyTotalSpent('year', ref) });
+        }
+      }
+      return history;
+    }
+    function familyHistoryChartHtml(period) {
+      const payers = App.state.familyPayers || [];
+      const history = familyHistoryChartData(period);
+      const maxH = Math.max(...history.map(h => h.total), 1);
+      const chartCols = history.map(h => {
+        const bars = payers.map((p, idx) => {
+          const amt = h.byPayer[p.id] || 0;
+          if (!amt) return '';
+          const color = FAMILY_PAYER_COLORS[idx % FAMILY_PAYER_COLORS.length];
+          return `<div class="mbar" style="height:${Math.max(3, amt / maxH * 80)}px;background:${color}" title="${esc(p.name)} ${fmt(amt)}"></div>`;
+        }).join('');
+        return `<div class="mcol">
+          <div class="mbars family-bars">${bars || '<div class="mbar" style="height:3px;background:#e2e8f0"></div>'}</div>
+          <span class="mlbl">${esc(h.label)}</span>
+        </div>`;
+      }).join('');
+      const legend = payers.map((p, idx) => {
+        const color = FAMILY_PAYER_COLORS[idx % FAMILY_PAYER_COLORS.length];
+        return `<span><span class="fam-dot" style="background:${color}"></span>${esc(p.name)}</span>`;
+      }).join('');
+      return {
+        chartCols,
+        legend,
+        historyTitle: period === 'month' ? 'Últimos 5 meses' : 'Últimos 5 anos',
+      };
+    }
+    function renderFamilyHistoryBody(period) {
+      const payers = App.state.familyPayers || [];
+      const curRef = familyPeriodRef(period, 0);
+      const prevRef = familyPeriodRef(period, -1);
+      const curLbl = familyPeriodLabel(period, curRef);
+      const prevLbl = familyPeriodLabel(period, prevRef);
+      const curTotal = familyTotalSpent(period, curRef);
+      const prevTotal = familyTotalSpent(period, prevRef);
+      const { chartCols, legend, historyTitle } = familyHistoryChartHtml(period);
+      const items = getFamilyPaidExpenses(period, curRef);
+      const payerRows = payers.map(p => compareRow(`👪 ${p.name}`, familyPayerTotal(p.id, period, curRef), familyPayerTotal(p.id, period, prevRef), null)).join('');
+      const prevCap = period === 'year' ? 'Ano anterior' : 'Mês anterior';
+      return `
+        <p style="font-size:12px;color:#64748b;margin:0 0 12px;line-height:1.45">Só registo — estes valores não entram no teu saldo nem nos resumos financeiros.</p>
+        <div class="period">${familyHistoryPeriodTabs(period)}</div>
+        <div class="card balance" style="background:linear-gradient(135deg,#ede9fe,#f5f3ff);border-color:#ddd6fe">
+          <div class="label" style="color:#6d28d9">Total da família</div>
+          <div class="amount" style="color:#5b21b6">${fmt(curTotal)}</div>
+          <div class="row" style="color:#7c3aed"><span>${curLbl}</span><span>${prevCap}: ${fmt(prevTotal)}</span></div>
+        </div>
+        <div class="card">
+          <div style="font-size:14px;font-weight:600">Comparação por pessoa</div>
+          <div style="font-size:11px;color:#94a3b8;margin:4px 0 14px">${curLbl} vs ${prevLbl}</div>
+          ${payerRows || '<div class="empty" style="padding:16px">Adiciona nomes nas definições (Mãe, Avó, etc.).</div>'}
+          ${payers.length ? compareRow('Total', curTotal, prevTotal, null) : ''}
+        </div>
+        <div class="card">
+          <div style="font-size:14px;font-weight:600">Evolução</div>
+          <div style="font-size:11px;color:#94a3b8;margin:4px 0 8px">${historyTitle} — cada cor é uma pessoa</div>
+          <div class="compare-chart">${chartCols}</div>
+          <div class="compare-legend family-legend">${legend || '<span style="color:#94a3b8">Sem pessoas</span>'}</div>
+        </div>
+        <div class="card" style="padding:0 16px">
+          <div style="font-size:14px;font-weight:600;padding:12px 0;border-bottom:1px solid #f1f5f9">Movimentos — ${period === 'year' ? 'este ano' : 'este mês'}</div>
+          ${items.length ? items.map(t => txRow(t)).join('') : '<div class="empty">Sem gastos registados neste período.<small>Regista gastos com «Quem pagou?»</small></div>'}
+        </div>`;
     }
 
     function periodRange(period, ref=new Date()) {
@@ -2284,6 +2405,7 @@
       formType: 'expense',
       formScope: 'personal',
       filters: { resumo:'month', gastos:'month', ganhos:'month', poupancas:'month', historico:'month', gastosScope:'all' },
+      familyHistoryPeriod: 'month',
       histType: 'expense',
       calMonth: new Date().getMonth(),
       calYear: new Date().getFullYear(),
@@ -4283,6 +4405,7 @@
                     </div>`).join('')}
                   </div>`;
                 })()}
+                <button type="button" class="settings-row clickable" style="margin-top:8px;border-top:1px solid #f1f5f9" onclick="App.openFamilyHistory()">📊 Histórico mensal e anual da família</button>
               </div>` : ''}
             </div>
           </section>
@@ -4357,6 +4480,32 @@
         this.save();
         this.renderSettings();
         this.toast(this.state.familyExpenseMode ? 'Modo família ativado' : 'Modo família desativado');
+      },
+
+      openFamilyHistory() {
+        this.closeSettings();
+        this.familyHistoryPeriod = this.familyHistoryPeriod || 'month';
+        this.renderFamilyHistory();
+        document.getElementById('family-history-overlay').classList.add('open');
+      },
+
+      closeFamilyHistory() {
+        document.getElementById('family-history-overlay').classList.remove('open');
+      },
+
+      setFamilyHistoryPeriod(val, btn) {
+        this.familyHistoryPeriod = val;
+        if (btn) {
+          btn.parentElement.querySelectorAll('button').forEach(b => b.classList.remove('active'));
+          btn.classList.add('active');
+        }
+        this.renderFamilyHistory();
+      },
+
+      renderFamilyHistory() {
+        const body = document.getElementById('family-history-body');
+        if (!body) return;
+        body.innerHTML = renderFamilyHistoryBody(this.familyHistoryPeriod || 'month');
       },
 
       addFamilyPayer() {
