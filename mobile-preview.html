@@ -425,6 +425,7 @@
     .tag { font-size: 9px; font-weight: 700; text-transform: uppercase; padding: 2px 5px; border-radius: 4px; background: #eff6ff; color: #2563eb; margin-left: 4px; }
     .tag.fixo { background: #f0fdfa; color: #0f766e; }
     .tag.family { background: #ede9fe; color: #6d28d9; }
+    .tag.vault { background: #d1fae5; color: #047857; }
     .btn-del { border: none; background: none; color: #cbd5e1; font-size: 16px; cursor: pointer; padding: 4px; line-height: 1; }
     .btn-del:hover { color: #ef4444; }
     .nav { position: fixed; bottom: 0; left: 50%; transform: translateX(-50%); width: 100%; max-width: 430px; background: white; border-top: 1px solid #f1f5f9; display: flex; padding-bottom: env(safe-area-inset-bottom, 8px); z-index: 20; }
@@ -851,6 +852,11 @@
             <select id="f-paidby"></select>
             <p class="field-hint">Regista quem pagou por ti (ex.: mãe, avó)</p>
           </div>
+          <div class="field" id="f-fromvault-wrap" hidden>
+            <label>Tirar da poupança?</label>
+            <select id="f-fromvault"></select>
+            <p class="field-hint">O valor desconta do local de poupança escolhido</p>
+          </div>
           <div class="field">
             <label>Nota</label>
             <textarea id="f-note" rows="3" placeholder="Observações, detalhes extra..."></textarea>
@@ -1108,7 +1114,14 @@
         <form onsubmit="App.saveSavingsTransfer(event)">
           <div class="field"><label>Valor (€)</label><input type="text" inputmode="decimal" id="st-amount" placeholder="0,00" required /></div>
           <div class="field"><label>Data</label><input type="text" id="st-date" required placeholder="dd/mm/aaaa" maxlength="10" inputmode="numeric" autocomplete="off" oninput="App.maskDateInput(this)" /></div>
-          <div class="field"><label>Onde guardaste?</label><input type="text" id="st-location" placeholder="Ex: Conta poupança BPI, cofre, carteira..." /></div>
+          <div class="field" id="st-vault-wrap" hidden>
+            <label>Onde guardaste?</label>
+            <select id="st-vault"></select>
+          </div>
+          <div class="field" id="st-location-wrap">
+            <label>Onde guardaste?</label>
+            <input type="text" id="st-location" placeholder="Ex: Conta poupança BPI, cofre, carteira..." />
+          </div>
           <div class="field"><label>Nota</label><input type="text" id="st-note" placeholder="Ex: Poupança do salário" /></div>
           <button type="submit" class="btn-primary" id="transfer-submit-btn">Guardar</button>
         </form>
@@ -1255,7 +1268,7 @@
       { id:'other-income', name:'Outros ganhos', icon:'💵', color:'#6ee7b7', scope:'income' },
     ];
 
-    const APP_VERSION = '1.4.0';
+    const APP_VERSION = '1.5.0';
     const DEFAULT_AGENDA_SETTINGS = {
       reminderDaysBefore: 1,
       businessName: '',
@@ -1632,6 +1645,43 @@
         </div>`;
     }
 
+    function savingsVault(id) { return (App.state.savingsVaults || []).find(v => v.id === id); }
+    function isSavingsVaultMode() { return !!App.state.savingsVaultMode; }
+    function vaultDisplayName(item) {
+      if (item?.vaultId) return (savingsVault(item.vaultId) || {}).name || item.location || '—';
+      return item?.location || '';
+    }
+    function vaultBalance(vaultId) {
+      const deposits = sum((App.state.savingsTransfers || []).filter(t => t.vaultId === vaultId));
+      const withdrawals = sum((App.state.transactions || []).filter(t => t.type === 'expense' && t.fromVaultId === vaultId));
+      return deposits - withdrawals;
+    }
+    function allVaultBalances() {
+      return (App.state.savingsVaults || [])
+        .map(v => ({ vault: v, balance: vaultBalance(v.id) }))
+        .sort((a, b) => b.balance - a.balance);
+    }
+    function savingsVaultsPanelHtml() {
+      if (!isSavingsVaultMode()) return '';
+      const balances = allVaultBalances();
+      if (!balances.length) return '';
+      const total = balances.reduce((s, x) => s + x.balance, 0);
+      return `<div class="card" style="padding:0 16px;margin-bottom:12px">
+        <div style="padding:12px 0;border-bottom:1px solid #f1f5f9">
+          <div style="font-size:14px;font-weight:600">Poupanças guardadas</div>
+          <div style="font-size:11px;color:#94a3b8;margin-top:4px">Quanto tens em cada local — entradas menos gastos retirados daí</div>
+        </div>
+        ${balances.map(({ vault, balance }) => `<div class="tx">
+          <div class="tx-icon" style="background:#d1fae5">🐷</div>
+          <div class="tx-info"><div class="name">${esc(vault.name)}</div></div>
+          <div class="tx-amount" style="color:${balance < 0 ? '#dc2626' : '#047857'}">${fmt(balance)}</div>
+        </div>`).join('')}
+        <div style="display:flex;justify-content:space-between;padding:12px 0;border-top:1px solid #f1f5f9;font-size:14px;font-weight:600">
+          <span>Total guardado</span><span style="color:#047857">${fmt(total)}</span>
+        </div>
+      </div>`;
+    }
+
     function periodRange(period, ref=new Date()) {
       const s = new Date(ref), e = new Date(ref);
       if (period==='day') { s.setHours(0,0,0,0); e.setHours(23,59,59,999); }
@@ -1726,9 +1776,11 @@
       const prof = t.scope==='professional' ? '<span class="tag">Prof.</span>' : '';
       const payer = t.paidById ? familyPayer(t.paidById) : null;
       const family = payer ? `<span class="tag family">${esc(payer.name)}</span>` : '';
+      const vault = t.fromVaultId ? savingsVault(t.fromVaultId) : null;
+      const vaultTag = vault ? `<span class="tag vault">🐷 ${esc(vault.name)}</span>` : '';
       const sub = showDate
-        ? `${fmtDate(t.date)}${t.location?' · '+t.location:''} ${fixo}${prof}${family}`
-        : `${t.location||c.name} ${fixo}${prof}${family}`;
+        ? `${fmtDate(t.date)}${t.location?' · '+t.location:''} ${fixo}${prof}${family}${vaultTag}`
+        : `${t.location||c.name} ${fixo}${prof}${family}${vaultTag}`;
       const action = t.isRecurring
         ? `<button class="btn-icon" onclick="event.stopPropagation();App.openRecurringForm('${t.recurringId}')" title="Editar">✎</button>`
         : `<button class="btn-del" onclick="event.stopPropagation();App.deleteTx('${t.id}')" title="Eliminar">×</button>`;
@@ -1752,7 +1804,8 @@
     }
 
     function savingsRow(t) {
-      const sub = [fmtDate(t.date), t.location, t.note].filter(Boolean).map((x, i) => i === 0 ? x : esc(x)).join(' · ');
+      const where = vaultDisplayName(t);
+      const sub = [fmtDate(t.date), where, t.note].filter(Boolean).map((x, i) => i === 0 ? x : esc(x)).join(' · ');
       return `<div class="tx clickable" onclick="App.openSavingsDetail('${t.id}')">
         <div class="tx-icon" style="background:#d1fae5">🐷</div>
         <div class="tx-info">
@@ -2632,6 +2685,8 @@
         if (!this.state.agendaSettings) { this.state.agendaSettings = { ...DEFAULT_AGENDA_SETTINGS }; this.save(); }
         if (this.state.familyExpenseMode === undefined) { this.state.familyExpenseMode = false; this.save(); }
         if (!this.state.familyPayers) { this.state.familyPayers = []; this.save(); }
+        if (this.state.savingsVaultMode === undefined) { this.state.savingsVaultMode = false; this.save(); }
+        if (!this.state.savingsVaults) { this.state.savingsVaults = []; this.save(); }
       },
 
       async bootstrap() {
@@ -2687,6 +2742,8 @@
           agendaSettings: { ...DEFAULT_AGENDA_SETTINGS },
           familyExpenseMode: false,
           familyPayers: [],
+          savingsVaultMode: false,
+          savingsVaults: [],
         };
         this.save();
       },
@@ -2785,6 +2842,7 @@
             <div class="card"><div class="lbl">Pessoal</div><div class="val">${fmt(sum(personal))}</div></div>
             <div class="card"><div class="lbl">Profissional</div><div class="val">${fmt(sum(prof))}</div></div>
           </div>
+          ${savingsVaultsPanelHtml()}
           ${collapseHtml('insights','Metas e alertas','Poupança, alertas e objetivos', insights, !this.collapsed.insights)}
           ${collapseHtml('categories','Categorias','Gastos, ganhos e editar', categoriesPanel, !this.collapsed.categories)}
           ${collapseHtml('analytics','Análise','Comparação mensal', analytics, !this.collapsed.analytics)}
@@ -3773,6 +3831,7 @@
 
         this.fillFormCategories(type, editing?.categoryId);
         this.updateFormPaidBy(editing?.paidById);
+        this.updateFormFromVault(editing?.fromVaultId);
         this.updateFormSavingsSuggest();
         document.getElementById('form-overlay').classList.add('open');
       },
@@ -3789,6 +3848,23 @@
           payers.map(p => `<option value="${p.id}">${esc(p.name)}</option>`).join('')
         }`;
         sel.value = selectedId && payers.some(p => p.id === selectedId) ? selectedId : '';
+      },
+
+      updateFormFromVault(selectedId) {
+        const wrap = document.getElementById('f-fromvault-wrap');
+        const sel = document.getElementById('f-fromvault');
+        if (!wrap || !sel) return;
+        const on = this.formType === 'expense' && isSavingsVaultMode();
+        wrap.hidden = !on;
+        if (!on) return;
+        const vaults = this.state.savingsVaults || [];
+        sel.innerHTML = `<option value="">Não — gasto normal</option>${
+          vaults.map(v => {
+            const bal = vaultBalance(v.id);
+            return `<option value="${v.id}">${esc(v.name)} (${fmt(bal)} disponível)</option>`;
+          }).join('')
+        }`;
+        sel.value = selectedId && vaults.some(v => v.id === selectedId) ? selectedId : '';
       },
 
       updateFormSavingsSuggest() {
@@ -3926,6 +4002,13 @@
             const prev = this.state.transactions.find(t => t.id === this.editingTxId);
             if (prev?.paidById) tx.paidById = prev.paidById;
           }
+          if (isSavingsVaultMode()) {
+            const fromVaultId = document.getElementById('f-fromvault')?.value || '';
+            if (fromVaultId) tx.fromVaultId = fromVaultId;
+          } else if (this.editingTxId) {
+            const prev = this.state.transactions.find(t => t.id === this.editingTxId);
+            if (prev?.fromVaultId) tx.fromVaultId = prev.fromVaultId;
+          }
         }
         if (this.editingTxId) {
           const idx = this.state.transactions.findIndex(t => t.id === this.editingTxId);
@@ -3978,6 +4061,7 @@
           <div class="detail-field"><div class="lbl">Tipo</div><div class="val">${tipo}</div></div>
           ${t.isRecurring ? '<div class="detail-field"><div class="lbl">Gasto fixo</div><div class="val">Sim — mensal</div></div>' : ''}
           ${!isInc && t.paidById ? `<div class="detail-field"><div class="lbl">Quem pagou</div><div class="val">${esc((familyPayer(t.paidById) || {}).name || '—')}</div></div>` : ''}
+          ${!isInc && t.fromVaultId ? `<div class="detail-field"><div class="lbl">Tirado da poupança</div><div class="val">🐷 ${esc((savingsVault(t.fromVaultId) || {}).name || '—')}</div></div>` : ''}
           ${t.location ? `<div class="detail-field"><div class="lbl">Local</div><div class="val">${esc(t.location)}</div></div>` : ''}
         </div>
         ${t.note ? `<div class="detail-note"><div class="lbl">Nota</div><div class="val">${esc(t.note)}</div></div>` : ''}`;
@@ -4410,6 +4494,33 @@
             </div>
           </section>
           <section class="settings-section">
+            <h3 class="settings-section-title">Locais de poupança</h3>
+            <div class="settings-group">
+              <div class="settings-row">
+                <div>
+                  <p style="font-size:14px;font-weight:500;margin:0">Onde guardo a poupança</p>
+                  <p style="font-size:12px;color:#64748b;margin:4px 0 0">Cria locais (banco, cofre…) e escolhe ao registar poupança ou ao gastar desse dinheiro. Vês o saldo de cada um no resumo.</p>
+                </div>
+                <button type="button" class="toggle${this.state.savingsVaultMode ? ' on' : ''}" role="switch" aria-checked="${!!this.state.savingsVaultMode}" onclick="App.toggleSavingsVaultMode()"></button>
+              </div>
+              ${this.state.savingsVaultMode ? `
+              <div style="padding:12px 16px;border-top:1px solid #f1f5f9">
+                <p style="font-size:13px;font-weight:500;margin:0 0 8px">Locais (cria os nomes)</p>
+                ${(this.state.savingsVaults || []).map(v => {
+                  const bal = vaultBalance(v.id);
+                  return `<div class="settings-row" style="padding:10px 0">
+                    <span style="font-size:14px">🐷 ${esc(v.name)} <span style="font-size:12px;color:#047857;font-weight:600">${fmt(bal)}</span></span>
+                    <button type="button" class="btn-icon del" onclick="App.deleteSavingsVault('${v.id}')" title="Eliminar">×</button>
+                  </div>`;
+                }).join('') || '<p style="font-size:12px;color:#94a3b8;margin:0 0 8px">Ainda sem locais — adiciona abaixo.</p>'}
+                <div style="display:flex;gap:8px;margin-top:8px">
+                  <input type="text" id="new-savings-vault" placeholder="Ex: Banco BPI, Cofre, Mealheiro..." style="flex:1;padding:10px 12px;border:1px solid #e2e8f0;border-radius:12px;font-size:14px" />
+                  <button type="button" class="btn-secondary" style="white-space:nowrap" onclick="App.addSavingsVault()">+ Adicionar</button>
+                </div>
+              </div>` : ''}
+            </div>
+          </section>
+          <section class="settings-section">
             <h3 class="settings-section-title">Editar categorias</h3>
             <div class="settings-group">
               <button type="button" class="settings-row clickable" onclick="App.openCategoriesSettings()">📁 Editar categorias</button>
@@ -4524,7 +4635,7 @@
         this.toast('Nome adicionado');
       },
 
-      async deleteFamilyPayer(id) {
+      async       deleteFamilyPayer(id) {
         const p = (this.state.familyPayers || []).find(x => x.id === id);
         if (!p || !(await this.confirm(`Eliminar "${p.name}"?`))) return;
         this.state.familyPayers = (this.state.familyPayers || []).filter(x => x.id !== id);
@@ -4534,11 +4645,47 @@
         this.toast('Nome eliminado');
       },
 
+      toggleSavingsVaultMode() {
+        this.state.savingsVaultMode = !this.state.savingsVaultMode;
+        if (!this.state.savingsVaults) this.state.savingsVaults = [];
+        this.save();
+        this.renderSettings();
+        this.toast(this.state.savingsVaultMode ? 'Locais de poupança ativados' : 'Locais de poupança desativados');
+      },
+
+      addSavingsVault() {
+        const input = document.getElementById('new-savings-vault');
+        const name = (input?.value || '').trim();
+        if (!name) { this.toast('Escreve um nome'); return; }
+        if (!this.state.savingsVaults) this.state.savingsVaults = [];
+        if (this.state.savingsVaults.some(v => v.name.toLowerCase() === name.toLowerCase())) {
+          this.toast('Este local já existe');
+          return;
+        }
+        this.state.savingsVaults.push({ id: uid(), name });
+        this.save();
+        if (input) input.value = '';
+        this.renderSettings();
+        this.toast('Local adicionado');
+      },
+
+      async deleteSavingsVault(id) {
+        const v = (this.state.savingsVaults || []).find(x => x.id === id);
+        if (!v || !(await this.confirm(`Eliminar "${v.name}"?`))) return;
+        this.state.savingsVaults = (this.state.savingsVaults || []).filter(x => x.id !== id);
+        (this.state.savingsTransfers || []).forEach(t => { if (t.vaultId === id) delete t.vaultId; });
+        this.state.transactions.forEach(t => { if (t.fromVaultId === id) delete t.fromVaultId; });
+        this.save();
+        this.renderSettings();
+        this.render();
+        this.toast('Local eliminado');
+      },
+
       signOut() {
         this.closeSettings();
         this.currentUser = null;
         setSessionUser(null);
-        this.state = { transactions: [], categories: [], receipts: [], recurring: [], savingsTransfers: [], categoryBudgets: {}, appointments: [], agendaSettings: { ...DEFAULT_AGENDA_SETTINGS }, familyExpenseMode: false, familyPayers: [] };
+        this.state = { transactions: [], categories: [], receipts: [], recurring: [], savingsTransfers: [], categoryBudgets: {}, appointments: [], agendaSettings: { ...DEFAULT_AGENDA_SETTINGS }, familyExpenseMode: false, familyPayers: [], savingsVaultMode: false, savingsVaults: [] };
         document.getElementById('login-screen').classList.remove('hidden');
         document.getElementById('login-user').value = '';
         document.getElementById('login-pass').value = '';
@@ -4564,6 +4711,8 @@
           agendaSettings: this.state.agendaSettings || { ...DEFAULT_AGENDA_SETTINGS },
           familyExpenseMode: !!this.state.familyExpenseMode,
           familyPayers: this.state.familyPayers || [],
+          savingsVaultMode: !!this.state.savingsVaultMode,
+          savingsVaults: this.state.savingsVaults || [],
         };
         const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
         const url = URL.createObjectURL(blob);
@@ -4595,6 +4744,8 @@
             agendaSettings: payload.agendaSettings || { ...DEFAULT_AGENDA_SETTINGS },
             familyExpenseMode: !!payload.familyExpenseMode,
             familyPayers: payload.familyPayers || [],
+            savingsVaultMode: !!payload.savingsVaultMode,
+            savingsVaults: payload.savingsVaults || [],
           };
           this.ensureStateFields();
           this.save();
@@ -4668,24 +4819,42 @@
         document.getElementById('st-amount').value = amt > 0 ? String(amt).replace('.', ',') : '';
         document.getElementById('st-location').value = editing?.location || location || '';
         document.getElementById('st-note').value = editing?.note || note || '';
+        this.updateSavingsTransferVaultUI(editing);
         document.getElementById('transfer-overlay').classList.add('open');
+      },
+
+      updateSavingsTransferVaultUI(editing) {
+        const vaultWrap = document.getElementById('st-vault-wrap');
+        const locWrap = document.getElementById('st-location-wrap');
+        const sel = document.getElementById('st-vault');
+        const on = isSavingsVaultMode();
+        if (vaultWrap) vaultWrap.hidden = !on;
+        if (locWrap) locWrap.hidden = on;
+        if (on && sel) {
+          const vaults = this.state.savingsVaults || [];
+          sel.innerHTML = `<option value="">Escolhe o local...</option>${
+            vaults.map(v => `<option value="${v.id}">${esc(v.name)}</option>`).join('')
+          }`;
+          sel.value = editing?.vaultId && vaults.some(v => v.id === editing.vaultId) ? editing.vaultId : '';
+        }
       },
 
       openSavingsDetail(id) {
         const t = (this.state.savingsTransfers || []).find(x => x.id === id);
         if (!t) return;
         this.detailSavingsId = id;
+        const where = vaultDisplayName(t);
         const html = `<div class="detail-hero">
           <div class="icon detail-icon-savings">🐷</div>
           <div class="info">
             <div class="name">Poupança</div>
-            <div class="cat">${t.location ? esc(t.location) : 'Sem local definido'}</div>
+            <div class="cat">${where ? esc(where) : 'Sem local definido'}</div>
           </div>
           <div class="amount income">${fmt(t.amount)}</div>
         </div>
         <div class="detail-grid">
           <div class="detail-field"><div class="lbl">Data</div><div class="val">${fmtDateLong(t.date)}</div></div>
-          <div class="detail-field"><div class="lbl">Onde</div><div class="val">${t.location ? esc(t.location) : '—'}</div></div>
+          <div class="detail-field"><div class="lbl">Onde</div><div class="val">${where ? esc(where) : '—'}</div></div>
         </div>
         ${t.note ? `<div class="detail-note"><div class="lbl">Nota</div><div class="val">${esc(t.note)}</div></div>` : ''}
         <button type="button" class="btn-edit" onclick="App.editSavingsFromDetail()">Editar poupança</button>
@@ -4748,15 +4917,23 @@
         if (!amount || amount <= 0) return;
         const dateIso = this.getDateInputIso('st-date');
         if (!dateIso) { this.toast('Data inválida — usa dd/mm/aaaa'); return; }
+        const on = isSavingsVaultMode();
+        const vaultId = on ? (document.getElementById('st-vault')?.value || '') : '';
+        if (on && (this.state.savingsVaults || []).length && !vaultId) {
+          this.toast('Escolhe onde guardaste a poupança');
+          return;
+        }
         if (!this.state.savingsTransfers) this.state.savingsTransfers = [];
         const existing = this.editingSavingsId
           ? this.state.savingsTransfers.find(t => t.id === this.editingSavingsId)
           : null;
+        const vault = vaultId ? savingsVault(vaultId) : null;
         const item = {
           id: this.editingSavingsId || uid(),
           amount,
           date: dateIso,
-          location: document.getElementById('st-location').value.trim() || undefined,
+          vaultId: vaultId || undefined,
+          location: vault ? vault.name : (document.getElementById('st-location').value.trim() || undefined),
           note: document.getElementById('st-note').value.trim() || undefined,
           createdAt: existing?.createdAt || new Date().toISOString(),
         };
