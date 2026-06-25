@@ -626,6 +626,23 @@
     .detail-receipt .hint { font-size: 11px; color: #94a3b8; text-align: center; margin-top: 6px; }
     .detail-empty { text-align: center; padding: 20px; background: #f8fafc; border-radius: 12px; color: #94a3b8; font-size: 13px; margin-bottom: 16px; }
     .btn-danger { width: 100%; padding: 12px; border: none; border-radius: 12px; background: #fef2f2; color: #dc2626; font-size: 14px; font-weight: 600; cursor: pointer; }
+    .savings-overview { background: linear-gradient(135deg, #ecfdf5, #f0fdfa); border: 1px solid #a7f3d0; border-radius: 16px; padding: 16px; margin-bottom: 12px; cursor: pointer; }
+    .savings-overview .lbl-top { font-size: 13px; font-weight: 600; color: #047857; }
+    .savings-overview .total { font-size: 30px; font-weight: 700; color: #065f46; margin-top: 6px; }
+    .savings-overview .flow { display: flex; gap: 12px; flex-wrap: wrap; margin-top: 10px; font-size: 12px; }
+    .savings-overview .flow span { padding: 4px 10px; border-radius: 99px; background: rgba(255,255,255,.7); }
+    .savings-overview .flow .in { color: #047857; }
+    .savings-overview .flow .out { color: #dc2626; }
+    .savings-overview .vaults { margin-top: 12px; padding-top: 12px; border-top: 1px solid #a7f3d0; }
+    .savings-overview .vault-row { display: flex; justify-content: space-between; font-size: 13px; padding: 4px 0; color: #065f46; }
+    .savings-chip-row { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
+    .savings-chip { padding: 8px 12px; border-radius: 99px; border: 1px solid #e2e8f0; background: white; font-size: 12px; font-weight: 500; color: #64748b; cursor: pointer; }
+    .savings-chip.active { background: #0f766e; border-color: #0f766e; color: white; }
+    html.dark-mode .savings-overview { background: linear-gradient(135deg, #1a3a38, #252526); border-color: #2d6a62; }
+    html.dark-mode .savings-overview .total,
+    html.dark-mode .savings-overview .lbl-top { color: #5eead4; }
+    html.dark-mode .savings-chip { background: #252526; border-color: #3c3c3c; color: #94a3b8; }
+    html.dark-mode .savings-chip.active { background: #094771; color: #4fc1ff; border-color: #094771; }
     .savings-card { background: linear-gradient(135deg, #ecfdf5, #f0fdfa); border: 1px solid #a7f3d0; border-radius: 16px; padding: 16px; margin-bottom: 12px; }
     .savings-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; }
     .savings-head .meta { flex: 1; min-width: 0; }
@@ -1284,7 +1301,7 @@
       { id:'other-income', name:'Outros ganhos', icon:'💵', color:'#6ee7b7', scope:'income' },
     ];
 
-    const APP_VERSION = '1.6.1';
+    const APP_VERSION = '1.7.0';
     const SAVINGS_CATEGORIES = [
       { id: 'general', name: 'Geral', icon: '🐷' },
       { id: 'emergency', name: 'Emergência', icon: '🛡️' },
@@ -1449,12 +1466,46 @@
       const month = App.listSavingsMonth[screen] || '';
       const dateDisplay = App.listSavingsDate[screen] || '';
       const dateIso = dateDisplay.length === 10 ? displayToIso(dateDisplay) : null;
+      const dir = App.listSavingsDirection?.[screen] || 'all';
+      const cat = App.listSavingsCategory?.[screen] || 'all';
+      const vault = App.listSavingsVault?.[screen] || 'all';
       return items.filter(t => {
         if (dateIso && t.date !== dateIso) return false;
         if (!dateIso && month && !t.date.startsWith(month)) return false;
+        if (dir === 'in' && t.direction === 'out') return false;
+        if (dir === 'out' && t.direction !== 'out') return false;
+        if (cat !== 'all' && (t.categoryId || 'general') !== cat) return false;
+        if (vault !== 'all' && (t.vaultId || '') !== vault) return false;
         if (!q) return true;
-        return (t.note || '').toLowerCase().includes(q) || (t.location || '').toLowerCase().includes(q);
+        const catLabel = savingsCategoryLabel(t).toLowerCase();
+        const where = vaultDisplayName(t).toLowerCase();
+        return (t.note || '').toLowerCase().includes(q)
+          || (t.location || '').toLowerCase().includes(q)
+          || catLabel.includes(q)
+          || where.includes(q);
       });
+    }
+
+    function savingsExtraFiltersHtml(screen) {
+      const dir = App.listSavingsDirection?.[screen] || 'all';
+      const cat = App.listSavingsCategory?.[screen] || 'all';
+      const vault = App.listSavingsVault?.[screen] || 'all';
+      const dirBtn = (val, label) =>
+        `<button type="button" class="savings-chip${dir === val ? ' active' : ''}" onclick="App.setSavingsDirectionFilter('${screen}','${val}')">${label}</button>`;
+      let html = `<div class="savings-chip-row">${dirBtn('all', 'Todos')}${dirBtn('in', 'Entradas')}${dirBtn('out', 'Saídas')}</div>`;
+      html += `<div class="savings-chip-row"><button type="button" class="savings-chip${cat === 'all' ? ' active' : ''}" onclick="App.setSavingsCategoryFilter('${screen}','all')">Todas categorias</button>`;
+      html += SAVINGS_CATEGORIES.map(c =>
+        `<button type="button" class="savings-chip${cat === c.id ? ' active' : ''}" onclick="App.setSavingsCategoryFilter('${screen}','${c.id}')">${c.icon} ${esc(c.name)}</button>`,
+      ).join('');
+      html += '</div>';
+      if (isSavingsVaultMode() && (App.state.savingsVaults || []).length) {
+        html += `<div class="savings-chip-row"><button type="button" class="savings-chip${vault === 'all' ? ' active' : ''}" onclick="App.setSavingsVaultFilter('${screen}','all')">Todos os locais</button>`;
+        html += (App.state.savingsVaults || []).map(v =>
+          `<button type="button" class="savings-chip${vault === v.id ? ' active' : ''}" onclick="App.setSavingsVaultFilter('${screen}','${v.id}')">🐷 ${esc(v.name)}</button>`,
+        ).join('');
+        html += '</div>';
+      }
+      return html;
     }
 
     function savingsListFiltersHtml(screen) {
@@ -1475,7 +1526,7 @@
         </div>
         <div class="full">
           <label for="search-input-${screen}">Pesquisar</label>
-          <input type="search" id="search-input-${screen}" placeholder="Nota ou local..."
+          <input type="search" id="search-input-${screen}" placeholder="Nota, local ou categoria..."
             value="${esc(q)}" oninput="App.setListSearch('${screen}', this.value)" />
         </div>
       </div>`;
@@ -1693,25 +1744,75 @@
         .map(v => ({ vault: v, balance: vaultBalance(v.id) }))
         .sort((a, b) => b.balance - a.balance);
     }
-    function savingsVaultsPanelHtml() {
-      if (!isSavingsVaultMode()) return '';
-      const balances = allVaultBalances();
-      if (!balances.length) return '';
-      const total = balances.reduce((s, x) => s + x.balance, 0);
-      return `<div class="card" style="padding:0 16px;margin-bottom:12px">
-        <div style="padding:12px 0;border-bottom:1px solid #f1f5f9">
-          <div style="font-size:14px;font-weight:600">Poupanças guardadas</div>
-          <div style="font-size:11px;color:#94a3b8;margin-top:4px">Quanto tens em cada local — entradas menos gastos retirados daí</div>
+    function totalSavingsBalance() {
+      const vaults = App.state.savingsVaults || [];
+      if (isSavingsVaultMode() && vaults.length) {
+        return allVaultBalances().reduce((s, x) => s + x.balance, 0);
+      }
+      const transferNet = (App.state.savingsTransfers || []).reduce((a, t) => a + signedSavingsAmount(t), 0);
+      const expenseOut = sum((App.state.transactions || []).filter(t => t.type === 'expense' && t.fromVaultId));
+      return transferNet - expenseOut;
+    }
+
+    function savingsPeriodFlow(period, ref = new Date()) {
+      const items = filterSavings(period, ref);
+      let ins = 0;
+      let outs = 0;
+      items.forEach(t => {
+        if (t.direction === 'out') outs += t.amount;
+        else ins += t.amount;
+      });
+      return { ins, outs, net: ins - outs };
+    }
+
+    function recentSavingsMovements(limit = 3, period = null) {
+      let items = [...(App.state.savingsTransfers || [])];
+      if (period) items = filterSavings(period);
+      return items.sort((a, b) =>
+        b.date.localeCompare(a.date) || (b.createdAt || '').localeCompare(a.createdAt || ''),
+      ).slice(0, limit);
+    }
+
+    function savingsOverviewCardHtml(period) {
+      const total = totalSavingsBalance();
+      const flow = savingsPeriodFlow(period);
+      const recent = recentSavingsMovements(3, period);
+      const vaults = isSavingsVaultMode() ? allVaultBalances().filter(x => x.balance !== 0) : [];
+      const totalColor = total < 0 ? '#dc2626' : '#065f46';
+      const vaultsHtml = vaults.length
+        ? `<div class="vaults">${vaults.slice(0, 4).map(({ vault, balance }) =>
+            `<div class="vault-row"><span>🐷 ${esc(vault.name)}</span><span style="color:${balance < 0 ? '#dc2626' : '#047857'};font-weight:600">${fmt(balance)}</span></div>`,
+          ).join('')}${vaults.length > 4 ? `<div style="font-size:11px;color:#059669;margin-top:4px">+${vaults.length - 4} locais</div>` : ''}</div>`
+        : '';
+      const recentHtml = recent.length
+        ? `<div style="margin-top:12px;padding-top:12px;border-top:1px solid #a7f3d0">${recent.map(t => {
+            const isOut = t.direction === 'out';
+            const where = vaultDisplayName(t);
+            return `<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;font-size:13px">
+              <span style="color:#64748b">${isOut ? 'Saída' : 'Entrada'} · ${fmtDate(t.date)}${where ? ' · ' + esc(where) : ''}</span>
+              <span style="font-weight:600;color:${isOut ? '#dc2626' : '#047857'}">${isOut ? '−' : '+'}${fmt(t.amount)}</span>
+            </div>`;
+          }).join('')}</div>`
+        : '<p style="font-size:12px;color:#059669;margin:12px 0 0">Sem movimentos neste período.</p>';
+      return `<div class="savings-overview" onclick="App.go('poupancas')">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start">
+          <div class="lbl-top">🐷 As tuas poupanças</div>
+          <span style="font-size:12px;color:#059669;font-weight:500">Ver tudo →</span>
         </div>
-        ${balances.map(({ vault, balance }) => `<div class="tx">
-          <div class="tx-icon" style="background:#d1fae5">🐷</div>
-          <div class="tx-info"><div class="name">${esc(vault.name)}</div></div>
-          <div class="tx-amount" style="color:${balance < 0 ? '#dc2626' : '#047857'}">${fmt(balance)}</div>
-        </div>`).join('')}
-        <div style="display:flex;justify-content:space-between;padding:12px 0;border-top:1px solid #f1f5f9;font-size:14px;font-weight:600">
-          <span>Total guardado</span><span style="color:${total < 0 ? '#dc2626' : '#047857'}">${fmt(total)}</span>
+        <div class="total" style="color:${totalColor}">${fmt(total)}</div>
+        <div style="font-size:11px;color:#059669;margin-top:2px">Total acumulado em poupança</div>
+        <div class="flow">
+          <span class="in">+ ${fmt(flow.ins)} entradas</span>
+          <span class="out">− ${fmt(flow.outs)} saídas</span>
+          <span style="color:${flow.net >= 0 ? '#047857' : '#dc2626'}">${savingsPeriodLabel(period)}: ${flow.net >= 0 ? '+' : ''}${fmt(flow.net)}</span>
         </div>
+        ${vaultsHtml}
+        ${recentHtml}
       </div>`;
+    }
+
+    function savingsVaultsPanelHtml() {
+      return '';
     }
 
     function periodRange(period, ref=new Date()) {
@@ -2074,7 +2175,7 @@
       </div>`;
     }
 
-    function savingsCardHtml() {
+    function savingsGoalCardHtml() {
       const g = App.state.savingsGoal || DEFAULT_SAVINGS;
       const { income, expenses, net, amount } = calcSavings(g);
       const saved = sumSavingsTransfers(g.period);
@@ -2089,7 +2190,7 @@
           <div style="display:flex;gap:12px;align-items:flex-start;flex:1;min-width:0">
             <div style="width:44px;height:44px;border-radius:12px;background:#d1fae5;display:flex;align-items:center;justify-content:center;font-size:22px">🐷</div>
             <div class="meta">
-              <div class="title">Lembrete de poupança</div>
+              <div class="title">Meta de poupança</div>
               <div class="sub">${g.percent}% do saldo · ${savingsPeriodTitle(g.period)}</div>
             </div>
           </div>
@@ -2524,8 +2625,11 @@
       listSearch: { gastos:'', ganhos:'', poupancas:'', historico:'' },
       listSavingsMonth: { poupancas:'', historico:'' },
       listSavingsDate: { poupancas:'', historico:'' },
+      listSavingsDirection: { poupancas:'all', historico:'all' },
+      listSavingsCategory: { poupancas:'all', historico:'all' },
+      listSavingsVault: { poupancas:'all', historico:'all' },
       listCategory: { gastos:'all', ganhos:'all', historico:'all' },
-      collapsed: { insights: true, categories: true, analytics: true },
+      collapsed: { insights: true, categories: true, analytics: true, poupancasGoal: true },
       catColor: '#f97316',
       CAT_COLORS: ['#f97316','#3b82f6','#ef4444','#a855f7','#22c55e','#ec4899','#6366f1','#64748b','#0ea5e9','#14b8a6','#f59e0b','#10b981'],
 
@@ -2677,7 +2781,7 @@
         setSessionUser(account);
         this.migrateLegacyStorage();
         this.screen = 'resumo';
-        this.collapsed = { insights: true, categories: true, analytics: true };
+        this.collapsed = { insights: true, categories: true, analytics: true, poupancasGoal: true };
         document.querySelectorAll('.nav button').forEach(b => b.classList.toggle('active', b.dataset.screen === 'resumo'));
         this.updateSubtitle();
         document.getElementById('login-screen').classList.add('hidden');
@@ -2865,7 +2969,7 @@
         const personal=exp.filter(t=>t.scope!=='professional');
         const prof=exp.filter(t=>t.scope==='professional');
         const top=this.topCategories(exp);
-        const insights = savingsCardHtml() + spendingAlertCardHtml() + goalsPanelHtml();
+        const insights = savingsGoalCardHtml() + spendingAlertCardHtml() + goalsPanelHtml();
         const categoriesPanel = this.renderCategoriesPanel(p);
         const analytics = (top.length?`<div class="card"><div style="font-size:14px;font-weight:600;margin-bottom:8px">Top Categorias</div>
             ${top.map(({c,total})=>`<div class="tx"><div class="tx-icon" style="background:${c.color}22">${c.icon}</div>
@@ -2887,8 +2991,8 @@
             <div class="card"><div class="lbl">Pessoal</div><div class="val">${fmt(sum(personal))}</div></div>
             <div class="card"><div class="lbl">Profissional</div><div class="val">${fmt(sum(prof))}</div></div>
           </div>
-          ${savingsVaultsPanelHtml()}
-          ${collapseHtml('insights','Metas e alertas','Poupança, alertas e objetivos', insights, !this.collapsed.insights)}
+          ${savingsOverviewCardHtml(p)}
+          ${collapseHtml('insights','Metas e alertas','Meta de poupança, alertas e objetivos', insights, !this.collapsed.insights)}
           ${collapseHtml('categories','Categorias','Gastos, ganhos e editar', categoriesPanel, !this.collapsed.categories)}
           ${collapseHtml('analytics','Análise','Comparação mensal', analytics, !this.collapsed.analytics)}
         </section>`;
@@ -2970,7 +3074,7 @@
           const p = this.filters.historico;
           const items = filterSavings(p).sort((a, b) => b.date.localeCompare(a.date));
           const empty = '<div class="empty">Sem poupanças registadas.<small>Usa o botão + para registar</small></div>';
-          const shown = filterSavingsList(items, this.listSearch.historico);
+          const shown = filterSavingsList(items, 'historico');
           body.innerHTML = shown.length ? shown.map(t => savingsRow(t)).join('') : empty;
           return;
         }
@@ -2986,17 +3090,37 @@
 
       setListSearch(screen, val) {
         this.listSearch[screen] = val;
-        this.refreshTxList();
+        if (screen === 'poupancas' || (screen === 'historico' && this.histType === 'savings')) this.render();
+        else this.refreshTxList();
       },
 
       setSavingsMonthFilter(screen, val) {
         this.listSavingsMonth[screen] = val || '';
-        this.refreshTxList();
+        this.render();
       },
 
       setSavingsDateFilter(screen, val) {
         this.listSavingsDate[screen] = val || '';
-        this.refreshTxList();
+        this.render();
+      },
+
+      setSavingsDirectionFilter(screen, val) {
+        if (!this.listSavingsDirection) this.listSavingsDirection = {};
+        this.listSavingsDirection[screen] = val;
+        this.render();
+      },
+
+      setSavingsCategoryFilter(screen, id) {
+        if (!this.listSavingsCategory) this.listSavingsCategory = {};
+        this.listSavingsCategory[screen] = id;
+        this.render();
+      },
+
+      setSavingsVaultFilter(screen, id) {
+        if (!this.listSavingsVault) this.listSavingsVault = {};
+        const cur = this.listSavingsVault[screen] || 'all';
+        this.listSavingsVault[screen] = cur === id ? 'all' : id;
+        this.render();
       },
 
       setListCategory(screen, val) {
@@ -3075,20 +3199,40 @@
         if (this.filters.poupancas!=='month' && this.filters.poupancas!=='year') this.filters.poupancas='month';
         const p=this.filters.poupancas;
         const allItems=filterSavings(p).sort((a,b)=>b.date.localeCompare(a.date)||(b.createdAt||'').localeCompare(a.createdAt||''));
-        const listBody=this.savingsListBodyHtml(allItems, 'poupancas');
         const shown=this.getPoupancasItems();
+        const listBody=this.savingsListBodyHtml(allItems, 'poupancas');
+        const total = totalSavingsBalance();
+        const flow = savingsPeriodFlow(p);
+        const periodNet = sumSavings(shown);
+        const totalColor = total < 0 ? '#dc2626' : '#065f46';
+        const vaults = isSavingsVaultMode() ? allVaultBalances() : [];
         return `<section class="screen active">
+          <div class="savings-overview" style="cursor:default;margin-bottom:12px">
+            <div class="lbl-top">🐷 Total em poupança</div>
+            <div class="total" style="color:${totalColor}">${fmt(total)}</div>
+            <div style="font-size:11px;color:#059669;margin-top:2px">Soma de todos os locais (entradas − saídas)</div>
+            ${vaults.length ? `<div class="vaults">${vaults.map(({ vault, balance }) =>
+              `<div class="vault-row"><span>🐷 ${esc(vault.name)}</span><span style="font-weight:600;color:${balance < 0 ? '#dc2626' : '#047857'}">${fmt(balance)}</span></div>`,
+            ).join('')}</div>` : ''}
+          </div>
           <div class="period">${periodTabsHtml('poupancas','poupancas',p,LIST_PERIOD_TABS)}</div>
-          ${savingsCardHtml()}
+          ${savingsExtraFiltersHtml('poupancas')}
           ${savingsListFiltersHtml('poupancas')}
-          <div class="card" style="display:flex;justify-content:space-between;align-items:center;padding:12px 16px">
-            <span style="font-size:13px;color:#64748b">Saldo do período</span>
-            <span id="poupancas-total" style="font-size:20px;font-weight:700;color:${sumSavings(shown) >= 0 ? '#047857' : '#dc2626'}">${fmt(sumSavings(shown))}</span>
+          <div class="card" style="padding:12px 16px;margin-bottom:12px">
+            <div style="display:flex;justify-content:space-between;font-size:13px;color:#64748b;margin-bottom:8px">
+              <span>Movimento no período (filtrado)</span>
+              <span id="poupancas-total" style="font-weight:700;color:${periodNet >= 0 ? '#047857' : '#dc2626'}">${periodNet >= 0 ? '+' : ''}${fmt(periodNet)}</span>
+            </div>
+            <div class="flow" style="display:flex;gap:8px;flex-wrap:wrap;font-size:12px">
+              <span style="padding:4px 10px;border-radius:99px;background:#ecfdf5;color:#047857">+ ${fmt(flow.ins)} entradas</span>
+              <span style="padding:4px 10px;border-radius:99px;background:#fef2f2;color:#dc2626">− ${fmt(flow.outs)} saídas</span>
+            </div>
           </div>
           <div class="card" style="padding:0 16px">
-            <div style="font-size:14px;font-weight:600;padding:12px 0;border-bottom:1px solid #f1f5f9">Histórico</div>
+            <div style="font-size:14px;font-weight:600;padding:12px 0;border-bottom:1px solid #f1f5f9">Histórico de entradas e saídas</div>
             <div id="tx-list-body">${listBody}</div>
           </div>
+          ${collapseHtml('poupancasGoal','Meta de poupança','Sugestão com base nos teus ganhos e gastos', savingsGoalCardHtml(), !this.collapsed.poupancasGoal)}
         </section>`;
       },
 
@@ -3105,9 +3249,8 @@
             ? getExpensesForList(p)
             : filterPeriod(this.state.transactions.filter(t=>t.type==='income'), p);
         filtered.sort((a,b)=>b.date.localeCompare(a.date));
-        const q = (this.listSearch.historico||'').trim().toLowerCase();
         const shown = isSavings
-          ? filtered.filter(t=>!q || (t.note||'').toLowerCase().includes(q) || (t.location||'').toLowerCase().includes(q))
+          ? filterSavingsList(filtered, 'historico')
           : filterTxList(filtered, this.listSearch.historico, this.listCategory.historico);
         const emptyMsg = isSavings
           ? '<div class="empty">Sem poupanças registadas.<small>Usa o botão + para registar</small></div>'
@@ -3116,11 +3259,7 @@
           ? (shown.length ? shown.map(t=>savingsRow(t)).join('') : emptyMsg)
           : this.txListBodyHtml(shown, emptyMsg);
         const filtersHtml = isSavings
-          ? `<div class="card" style="padding:12px 16px">
-              <label style="font-size:12px;color:#64748b;display:block;margin-bottom:6px">Pesquisar nota</label>
-              <input type="search" placeholder="Pesquisar nota ou local..." value="${esc(this.listSearch.historico||'')}"
-                oninput="App.setListSearch('historico', this.value)" style="width:100%;padding:10px 12px;border:1px solid #e2e8f0;border-radius:12px;font-size:14px" />
-            </div>`
+          ? savingsExtraFiltersHtml('historico') + savingsListFiltersHtml('historico')
           : listFiltersHtml('historico', filtered);
         return `<section class="screen active">
           <button class="back-btn" onclick="App.go('resumo')">← Voltar ao resumo</button>
@@ -4766,6 +4905,7 @@
           return;
         }
         this.state.savingsVaults.push({ id: uid(), name });
+        if (!this.state.savingsVaultMode) this.state.savingsVaultMode = true;
         this.save();
         if (input) input.value = '';
         this.renderSettings();
@@ -4951,22 +5091,26 @@
         const t = (this.state.savingsTransfers || []).find(x => x.id === id);
         if (!t) return;
         this.detailSavingsId = id;
+        const isOut = t.direction === 'out';
         const where = vaultDisplayName(t);
+        const cat = savingsCategoryLabel(t);
         const html = `<div class="detail-hero">
-          <div class="icon detail-icon-savings">🐷</div>
+          <div class="icon detail-icon-savings">${isOut ? '↗' : '🐷'}</div>
           <div class="info">
-            <div class="name">Poupança</div>
-            <div class="cat">${where ? esc(where) : 'Sem local definido'}</div>
+            <div class="name">${isOut ? 'Saída de poupança' : 'Entrada em poupança'}</div>
+            <div class="cat">${esc(cat)}${where ? ' · ' + esc(where) : ''}</div>
           </div>
-          <div class="amount income">${fmt(t.amount)}</div>
+          <div class="amount ${isOut ? '' : 'income'}" style="${isOut ? 'color:#dc2626' : ''}">${isOut ? '−' : '+'}${fmt(t.amount)}</div>
         </div>
         <div class="detail-grid">
           <div class="detail-field"><div class="lbl">Data</div><div class="val">${fmtDateLong(t.date)}</div></div>
-          <div class="detail-field"><div class="lbl">Onde</div><div class="val">${where ? esc(where) : '—'}</div></div>
+          <div class="detail-field"><div class="lbl">Tipo</div><div class="val">${isOut ? 'Saída' : 'Entrada'}</div></div>
+          <div class="detail-field"><div class="lbl">Categoria</div><div class="val">${esc(cat)}</div></div>
+          <div class="detail-field"><div class="lbl">Local</div><div class="val">${where ? esc(where) : '—'}</div></div>
         </div>
         ${t.note ? `<div class="detail-note"><div class="lbl">Nota</div><div class="val">${esc(t.note)}</div></div>` : ''}
-        <button type="button" class="btn-edit" onclick="App.editSavingsFromDetail()">Editar poupança</button>
-        <button type="button" class="btn-danger" onclick="App.deleteSavingsFromDetail()">Eliminar poupança</button>`;
+        <button type="button" class="btn-edit" onclick="App.editSavingsFromDetail()">Editar movimento</button>
+        <button type="button" class="btn-danger" onclick="App.deleteSavingsFromDetail()">Eliminar movimento</button>`;
         document.getElementById('savings-detail-body').innerHTML = html;
         document.getElementById('savings-detail-overlay').classList.add('open');
       },
