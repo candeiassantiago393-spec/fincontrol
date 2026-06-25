@@ -1284,7 +1284,7 @@
       { id:'other-income', name:'Outros ganhos', icon:'💵', color:'#6ee7b7', scope:'income' },
     ];
 
-    const APP_VERSION = '1.6.0';
+    const APP_VERSION = '1.6.1';
     const SAVINGS_CATEGORIES = [
       { id: 'general', name: 'Geral', icon: '🐷' },
       { id: 'emergency', name: 'Emergência', icon: '🛡️' },
@@ -1430,7 +1430,7 @@
       return transfers.filter(t => {
         const d = new Date(t.date+'T12:00:00');
         return d>=s && d<=e;
-      }).reduce((a,t) => a+t.amount, 0);
+      }).reduce((a,t) => a + signedSavingsAmount(t), 0);
     }
 
     function filterTxList(items, query, categoryId) {
@@ -1682,9 +1682,11 @@
       return item?.location || '';
     }
     function vaultBalance(vaultId) {
-      const deposits = sum((App.state.savingsTransfers || []).filter(t => t.vaultId === vaultId));
-      const withdrawals = sum((App.state.transactions || []).filter(t => t.type === 'expense' && t.fromVaultId === vaultId));
-      return deposits - withdrawals;
+      const transferNet = (App.state.savingsTransfers || [])
+        .filter(t => t.vaultId === vaultId)
+        .reduce((a, t) => a + signedSavingsAmount(t), 0);
+      const expenseOut = sum((App.state.transactions || []).filter(t => t.type === 'expense' && t.fromVaultId === vaultId));
+      return transferNet - expenseOut;
     }
     function allVaultBalances() {
       return (App.state.savingsVaults || [])
@@ -1707,7 +1709,7 @@
           <div class="tx-amount" style="color:${balance < 0 ? '#dc2626' : '#047857'}">${fmt(balance)}</div>
         </div>`).join('')}
         <div style="display:flex;justify-content:space-between;padding:12px 0;border-top:1px solid #f1f5f9;font-size:14px;font-weight:600">
-          <span>Total guardado</span><span style="color:#047857">${fmt(total)}</span>
+          <span>Total guardado</span><span style="color:${total < 0 ? '#dc2626' : '#047857'}">${fmt(total)}</span>
         </div>
       </div>`;
     }
