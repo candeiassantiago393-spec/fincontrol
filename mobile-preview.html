@@ -433,8 +433,9 @@
     .nav button.active { color: #0f766e; }
     .nav svg { width: 18px; height: 18px; }
     .fab-wrap { position: fixed; bottom: 80px; right: max(16px, calc(50% - 215px + 16px)); z-index: 30; display: flex; flex-direction: column; align-items: flex-end; gap: 8px; }
-    .fab-menu { display: none; flex-direction: column; gap: 8px; }
-    .fab-menu.open { display: flex; }
+    .fab-menu, .fab-savings-menu { display: none; flex-direction: column; gap: 8px; }
+    .fab-menu.open, .fab-savings-menu.open { display: flex; }
+    .fab-wrap.hidden { display: none !important; }
     .fab-opt { padding: 10px 14px; border-radius: 12px; background: white; border: 1px solid #f1f5f9; font-size: 13px; font-weight: 500; cursor: pointer; box-shadow: 0 4px 12px rgba(0,0,0,.08); white-space: nowrap; }
     .fab-opt.expense { color: #dc2626; }
     .fab-opt.income { color: #059669; }
@@ -788,13 +789,17 @@
 
   <main id="main"></main>
 
-  <div class="fab-wrap">
+  <div class="fab-wrap" id="fab-wrap">
     <div class="fab-menu" id="fab-menu">
       <button class="fab-opt photo" onclick="App.quickReceipt()">📷 <span data-i18n="fab.quickReceipt">Foto rápida</span></button>
       <button class="fab-opt agenda" onclick="App.openAptFromFab()">+ <span data-i18n="fab.newAppointment">Nova marcação</span></button>
-      <button class="fab-opt savings" onclick="App.openSavingsTransfer()">+ <span data-i18n="fab.registerSavings">Nova Poupança</span></button>
+      <button class="fab-opt savings" onclick="App.openSavingsTransfer(null,0,'','','','in')">+ <span data-i18n="fab.registerSavings">Nova Poupança</span></button>
       <button class="fab-opt income" onclick="App.openForm('income')">+ <span data-i18n="fab.newIncome">Novo Ganho</span></button>
       <button class="fab-opt expense" onclick="App.openForm('expense')">+ <span data-i18n="fab.newExpense">Novo Gasto</span></button>
+    </div>
+    <div class="fab-savings-menu" id="fab-savings-menu">
+      <button class="fab-opt expense" onclick="App.openSavingsTransfer(null,0,'','','','out')">− Tirar de poupança</button>
+      <button class="fab-opt savings" onclick="App.openSavingsTransfer(null,0,'','','','in')">+ Nova poupança</button>
     </div>
     <button class="fab" id="fab" onclick="App.toggleFab()">+</button>
   </div>
@@ -1112,6 +1117,17 @@
       </div>
       <div class="sheet-body">
         <form onsubmit="App.saveSavingsTransfer(event)">
+          <div class="field" id="st-direction-wrap">
+            <label>Tipo</label>
+            <div class="filter-row" style="margin:0">
+              <button type="button" id="st-dir-in" onclick="App.setSavingsTransferDirection('in')">Nova poupança</button>
+              <button type="button" id="st-dir-out" onclick="App.setSavingsTransferDirection('out')">Tirar de poupança</button>
+            </div>
+          </div>
+          <div class="field" id="st-category-wrap">
+            <label>Categoria</label>
+            <div id="st-category-chips" class="profile-chips" style="padding:0;border:none"></div>
+          </div>
           <div class="field"><label>Valor (€)</label><input type="text" inputmode="decimal" id="st-amount" placeholder="0,00" required /></div>
           <div class="field"><label>Data</label><input type="text" id="st-date" required placeholder="dd/mm/aaaa" maxlength="10" inputmode="numeric" autocomplete="off" oninput="App.maskDateInput(this)" /></div>
           <div class="field" id="st-vault-wrap" hidden>
@@ -1268,7 +1284,15 @@
       { id:'other-income', name:'Outros ganhos', icon:'💵', color:'#6ee7b7', scope:'income' },
     ];
 
-    const APP_VERSION = '1.5.0';
+    const APP_VERSION = '1.6.0';
+    const SAVINGS_CATEGORIES = [
+      { id: 'general', name: 'Geral', icon: '🐷' },
+      { id: 'emergency', name: 'Emergência', icon: '🛡️' },
+      { id: 'vacation', name: 'Férias', icon: '✈️' },
+      { id: 'investment', name: 'Investimento', icon: '📈' },
+      { id: 'car', name: 'Carro', icon: '🚗' },
+      { id: 'home', name: 'Casa', icon: '🏠' },
+    ];
     const DEFAULT_AGENDA_SETTINGS = {
       reminderDaysBefore: 1,
       businessName: '',
@@ -1500,6 +1524,12 @@
     }
     function today() { return new Date().toISOString().slice(0,10); }
     function sum(arr) { return arr.reduce((a,t)=>a+t.amount,0); }
+    function signedSavingsAmount(t) { return (t.direction === 'out' ? -1 : 1) * t.amount; }
+    function sumSavings(arr) { return arr.reduce((a,t)=>a+signedSavingsAmount(t),0); }
+    function savingsCategoryLabel(t) {
+      const cat = SAVINGS_CATEGORIES.find(c => c.id === (t.categoryId || 'general'));
+      return cat ? `${cat.icon} ${cat.name}` : '🐷 Geral';
+    }
     function cat(id) { return App.state.categories.find(c=>c.id===id); }
     function familyPayer(id) { return (App.state.familyPayers || []).find(p => p.id === id); }
     function isFamilyExpenseMode() { return !!App.state.familyExpenseMode; }
@@ -1804,12 +1834,20 @@
     }
 
     function savingsRow(t) {
+      const isOut = t.direction === 'out';
       const where = vaultDisplayName(t);
-      const sub = [fmtDate(t.date), where, t.note].filter(Boolean).map((x, i) => i === 0 ? x : esc(x)).join(' · ');
+      const cat = savingsCategoryLabel(t);
+      const sub = [
+        isOut ? 'Saída' : 'Entrada',
+        fmtDate(t.date),
+        cat,
+        where,
+        t.note,
+      ].filter(Boolean).map((x, i) => i <= 1 ? x : esc(x)).join(' · ');
       return `<div class="tx clickable" onclick="App.openSavingsDetail('${t.id}')">
-        <div class="tx-icon" style="background:#d1fae5">🐷</div>
+        <div class="tx-icon" style="background:${isOut ? '#fee2e2' : '#d1fae5'}">${isOut ? '↗' : '🐷'}</div>
         <div class="tx-info">
-          <div class="name" style="color:#047857">${fmt(t.amount)}</div>
+          <div class="name" style="color:${isOut ? '#dc2626' : '#047857'}">${isOut ? '−' : '+'}${fmt(t.amount)}</div>
           <div class="sub">${sub}</div>
         </div>
         <button class="btn-del" onclick="event.stopPropagation();App.deleteSavingsTransfer('${t.id}')" title="Eliminar">×</button>
@@ -2455,6 +2493,8 @@
 
     const App = {
       screen: 'resumo',
+      savingsTransferDirection: 'in',
+      savingsCategoryId: 'general',
       formType: 'expense',
       formScope: 'personal',
       filters: { resumo:'month', gastos:'month', ganhos:'month', poupancas:'month', historico:'month', gastosScope:'all' },
@@ -2641,6 +2681,7 @@
         document.getElementById('login-screen').classList.add('hidden');
         await this.bootstrap();
         this.render();
+        this.updateFabVisibility();
       },
 
       async handleLogin(e) {
@@ -2763,6 +2804,8 @@
         if (name === 'categorias') name = 'agenda';
         this.screen=name;
         document.querySelectorAll('.nav button').forEach(b=>b.classList.toggle('active', b.dataset.screen===name));
+        this.closeFabMenus();
+        this.updateFabVisibility();
         this.updateSubtitle();
         this.render();
       },
@@ -2914,7 +2957,11 @@
           const empty = '<div class="empty">Sem poupanças neste período.<small>Usa o botão + para registar</small></div>';
           body.innerHTML = shown.length ? shown.map(t => savingsRow(t)).join('') : empty;
           const totalEl = document.getElementById('poupancas-total');
-          if (totalEl) totalEl.textContent = fmt(sum(shown));
+          if (totalEl) {
+            const total = sumSavings(shown);
+            totalEl.textContent = fmt(total);
+            totalEl.style.color = total >= 0 ? '#047857' : '#dc2626';
+          }
           return;
         }
         if (screen === 'historico' && this.histType === 'savings') {
@@ -3033,8 +3080,8 @@
           ${savingsCardHtml()}
           ${savingsListFiltersHtml('poupancas')}
           <div class="card" style="display:flex;justify-content:space-between;align-items:center;padding:12px 16px">
-            <span style="font-size:13px;color:#64748b">Total poupado</span>
-            <span id="poupancas-total" style="font-size:20px;font-weight:700;color:#047857">${fmt(sum(shown))}</span>
+            <span style="font-size:13px;color:#64748b">Saldo do período</span>
+            <span id="poupancas-total" style="font-size:20px;font-weight:700;color:${sumSavings(shown) >= 0 ? '#047857' : '#dc2626'}">${fmt(sumSavings(shown))}</span>
           </div>
           <div class="card" style="padding:0 16px">
             <div style="font-size:14px;font-weight:600;padding:12px 0;border-bottom:1px solid #f1f5f9">Histórico</div>
@@ -3769,13 +3816,68 @@
       },
 
       toggleFab() {
-        const menu=document.getElementById('fab-menu'), fab=document.getElementById('fab');
-        menu.classList.toggle('open'); fab.classList.toggle('open');
+        const screen = this.screen;
+        if (screen === 'gastos') { this.openForm('expense'); return; }
+        if (screen === 'ganhos') { this.openForm('income'); return; }
+        if (screen === 'poupancas') {
+          const menu = document.getElementById('fab-savings-menu');
+          const fab = document.getElementById('fab');
+          menu.classList.toggle('open');
+          fab.classList.toggle('open');
+          document.getElementById('fab-menu').classList.remove('open');
+          return;
+        }
+        if (screen !== 'resumo') return;
+        const menu = document.getElementById('fab-menu');
+        const fab = document.getElementById('fab');
+        menu.classList.toggle('open');
+        fab.classList.toggle('open');
+        document.getElementById('fab-savings-menu').classList.remove('open');
+      },
+
+      closeFabMenus() {
+        document.getElementById('fab-menu')?.classList.remove('open');
+        document.getElementById('fab-savings-menu')?.classList.remove('open');
+        document.getElementById('fab')?.classList.remove('open');
+      },
+
+      updateFabVisibility() {
+        const wrap = document.getElementById('fab-wrap');
+        if (!wrap) return;
+        const show = ['resumo', 'gastos', 'ganhos', 'poupancas'].includes(this.screen);
+        wrap.classList.toggle('hidden', !show);
+      },
+
+      setSavingsTransferDirection(direction) {
+        this.savingsTransferDirection = direction;
+        const isOut = direction === 'out';
+        document.getElementById('st-dir-in')?.classList.toggle('active', !isOut);
+        document.getElementById('st-dir-out')?.classList.toggle('active', isOut);
+        document.getElementById('transfer-form-title').textContent = isOut
+          ? 'Tirar de poupança'
+          : (this.editingSavingsId ? 'Editar poupança' : 'Registar poupança');
+        document.getElementById('transfer-submit-btn').textContent = isOut
+          ? 'Registar saída'
+          : (this.editingSavingsId ? 'Guardar alterações' : 'Guardar');
+      },
+
+      renderSavingsCategoryChips(selectedId) {
+        const wrap = document.getElementById('st-category-chips');
+        if (!wrap) return;
+        const id = selectedId || this.savingsCategoryId || 'general';
+        this.savingsCategoryId = id;
+        wrap.innerHTML = SAVINGS_CATEGORIES.map(c =>
+          `<button type="button" class="profile-chip${id === c.id ? ' active' : ''}" onclick="App.pickSavingsCategory('${c.id}')">${c.icon} ${esc(c.name)}</button>`
+        ).join('');
+      },
+
+      pickSavingsCategory(id) {
+        this.savingsCategoryId = id;
+        this.renderSavingsCategoryChips(id);
       },
 
       openAptFromFab() {
-        document.getElementById('fab-menu').classList.remove('open');
-        document.getElementById('fab').classList.remove('open');
+        this.closeFabMenus();
         if (this.screen !== 'agenda') this.go('agenda');
         if (!this.agSelected) this.agSelected = today();
         this.openAptForm();
@@ -3796,8 +3898,7 @@
         this.formType=type;
         this.editingTxId = editId || null;
         const editing = editId ? this.state.transactions.find(t => t.id === editId) : null;
-        document.getElementById('fab-menu').classList.remove('open');
-        document.getElementById('fab').classList.remove('open');
+        this.closeFabMenus();
         document.getElementById('form-title').textContent = editing
           ? (type==='expense'?'Editar Gasto':'Editar Ganho')
           : (type==='expense'?'Novo Gasto':'Novo Ganho');
@@ -4785,8 +4886,7 @@
       },
 
       quickReceipt() {
-        document.getElementById('fab-menu').classList.remove('open');
-        document.getElementById('fab').classList.remove('open');
+        this.closeFabMenus();
         document.getElementById('quick-receipt-input').click();
       },
 
@@ -4805,15 +4905,21 @@
         input.value = '';
       },
 
-      openSavingsTransfer(dateIso, amount, note, location, editId) {
-        document.getElementById('fab-menu').classList.remove('open');
-        document.getElementById('fab').classList.remove('open');
+      openSavingsTransfer(dateIso, amount, note, location, editId, direction) {
+        this.closeFabMenus();
         this.editingSavingsId = editId || null;
         const editing = editId
           ? (this.state.savingsTransfers || []).find(t => t.id === editId)
           : null;
-        document.getElementById('transfer-form-title').textContent = editing ? 'Editar poupança' : 'Registar poupança';
-        document.getElementById('transfer-submit-btn').textContent = editing ? 'Guardar alterações' : 'Guardar';
+        const dir = editing?.direction || direction || 'in';
+        this.setSavingsTransferDirection(dir);
+        this.renderSavingsCategoryChips(editing?.categoryId || 'general');
+        document.getElementById('transfer-form-title').textContent = dir === 'out'
+          ? (editing ? 'Editar saída' : 'Tirar de poupança')
+          : (editing ? 'Editar poupança' : 'Registar poupança');
+        document.getElementById('transfer-submit-btn').textContent = dir === 'out'
+          ? (editing ? 'Guardar alterações' : 'Registar saída')
+          : (editing ? 'Guardar alterações' : 'Guardar');
         document.getElementById('st-date').value = isoToDisplay(editing?.date || dateIso || today());
         const amt = editing?.amount ?? amount;
         document.getElementById('st-amount').value = amt > 0 ? String(amt).replace('.', ',') : '';
@@ -4932,6 +5038,8 @@
           id: this.editingSavingsId || uid(),
           amount,
           date: dateIso,
+          direction: this.savingsTransferDirection || 'in',
+          categoryId: this.savingsCategoryId || 'general',
           vaultId: vaultId || undefined,
           location: vault ? vault.name : (document.getElementById('st-location').value.trim() || undefined),
           note: document.getElementById('st-note').value.trim() || undefined,
@@ -4946,7 +5054,9 @@
         }
         this.save();
         this.closeSavingsTransfer();
-        this.toast(this.editingSavingsId ? 'Poupança atualizada' : 'Poupança registada');
+        this.toast(this.editingSavingsId
+          ? 'Movimento atualizado'
+          : (item.direction === 'out' ? 'Saída registada' : 'Poupança registada'));
         this.render();
       },
 
