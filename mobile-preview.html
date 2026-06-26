@@ -444,12 +444,12 @@
     .fab-opt.agenda { color: #0f766e; }
     .fab { width: 56px; height: 56px; border-radius: 18px; background: linear-gradient(135deg, #14b8a6, #0f766e); color: white; border: none; font-size: 28px; cursor: pointer; display: flex; align-items: center; justify-content: center; box-shadow: 0 6px 20px rgba(15,118,110,.4); transition: transform .2s; }
     .search-bar { display: flex; gap: 8px; margin-bottom: 12px; }
-    .search-bar input { flex: 1; padding: 10px 14px; border: 1px solid #e2e8f0; border-radius: 12px; font-size: 14px; font-family: inherit; background: white; }
+    .search-bar input { flex: 1; padding: 10px 14px; border: 1px solid #e2e8f0; border-radius: 12px; font-size: 16px; font-family: inherit; background: white; }
     .search-bar select { padding: 10px 12px; border: 1px solid #e2e8f0; border-radius: 12px; font-size: 13px; background: white; max-width: 42%; }
     .savings-filters { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 12px; }
     .savings-filters .full { grid-column: 1 / -1; }
     .savings-filters label { font-size: 11px; color: #64748b; display: block; margin-bottom: 4px; }
-    .savings-filters input { width: 100%; padding: 10px 12px; border: 1px solid #e2e8f0; border-radius: 12px; font-size: 14px; font-family: inherit; background: white; box-sizing: border-box; }
+    .savings-filters input { width: 100%; padding: 10px 12px; border: 1px solid #e2e8f0; border-radius: 12px; font-size: 16px; font-family: inherit; background: white; box-sizing: border-box; }
     .collapse { margin-bottom: 12px; }
     .collapse-head { display: flex; justify-content: space-between; align-items: center; padding: 14px 16px; background: white; border: 1px solid #f1f5f9; border-radius: 16px; cursor: pointer; user-select: none; box-shadow: 0 1px 3px rgba(15,23,42,.04); }
     .collapse-head .title { font-size: 14px; font-weight: 600; }
@@ -510,7 +510,7 @@
     .client-chip:active { background: #ccfbf1; }
     .client-actions-row { display: flex; gap: 8px; margin-bottom: 10px; }
     .client-actions-row .btn-import-contacts { flex: 1; margin-bottom: 0; font-size: 12px; padding: 10px 8px; }
-    .client-picker-search { width: 100%; padding: 11px 14px; border: 1px solid #e2e8f0; border-radius: 12px; font-size: 15px; margin-bottom: 8px; font-family: inherit; }
+    .client-picker-search { width: 100%; padding: 11px 14px; border: 1px solid #e2e8f0; border-radius: 12px; font-size: 16px; margin-bottom: 8px; font-family: inherit; }
     .client-picker-count { font-size: 11px; color: #94a3b8; margin-bottom: 10px; }
     .client-picker-list { max-height: 50vh; overflow-y: auto; margin-bottom: 12px; border: 1px solid #f1f5f9; border-radius: 12px; }
     html.dark-mode .btn-choose-client { background: var(--dm-brand) !important; }
@@ -915,7 +915,7 @@
 
   <div class="search-overlay" id="search-overlay">
     <div class="search-head">
-      <input id="global-search-input" placeholder="Pesquisar em todos os movimentos..." oninput="App.runGlobalSearch()" />
+      <input id="global-search-input" type="text" inputmode="search" enterkeyhint="search" autocomplete="off" autocorrect="off" spellcheck="false" placeholder="Pesquisar em todos os movimentos..." oninput="App.runGlobalSearch()" />
       <button class="btn-search" onclick="App.closeSearch()">×</button>
     </div>
     <div class="search-results" id="search-results"></div>
@@ -1029,7 +1029,7 @@
         <button class="sheet-close" onclick="App.closeClientPicker()">×</button>
       </div>
       <div class="sheet-body">
-        <input type="search" class="client-picker-search" id="client-picker-search" placeholder="Pesquisar por nome…" autocomplete="off" oninput="App.filterClientPicker()" />
+        <input type="text" class="client-picker-search" id="client-picker-search" placeholder="Pesquisar por nome…" autocomplete="off" autocorrect="off" spellcheck="false" inputmode="search" enterkeyhint="search" oninput="App.filterClientPicker()" />
         <p class="client-picker-count" id="client-picker-count"></p>
         <div class="client-picker-list" id="client-picker-list"></div>
         <button type="button" class="btn-import-contacts" onclick="document.getElementById('vcf-import-input').click()">📥 Importar novos contactos (.vcf)</button>
@@ -1306,7 +1306,7 @@
       { id:'other-income', name:'Outros ganhos', icon:'💵', color:'#6ee7b7', scope:'income' },
     ];
 
-    const APP_VERSION = '1.8.0';
+    const APP_VERSION = '1.8.1';
     const SAVINGS_CATEGORIES = [
       { id: 'general', name: 'Geral', icon: '🐷' },
       { id: 'emergency', name: 'Emergência', icon: '🛡️' },
@@ -1531,7 +1531,7 @@
         </div>
         <div class="full">
           <label for="search-input-${screen}">Pesquisar</label>
-          <input type="search" id="search-input-${screen}" placeholder="Nota, local ou categoria..."
+          <input type="text" id="search-input-${screen}" inputmode="search" enterkeyhint="search" autocomplete="off" autocorrect="off" spellcheck="false" placeholder="Nota, local ou categoria..."
             value="${esc(q)}" oninput="App.setListSearch('${screen}', this.value)" />
         </div>
       </div>`;
@@ -1544,7 +1544,7 @@
       const opts = `<option value="all">Todas categorias</option>` +
         cats.map(c => `<option value="${c.id}"${catId===c.id?' selected':''}>${c.icon} ${esc(c.name)}</option>`).join('');
       return `<div class="search-bar" id="search-bar-${screen}">
-        <input type="search" id="search-input-${screen}" class="search-input" placeholder="Pesquisar..." value="${esc(q)}"
+        <input type="text" id="search-input-${screen}" class="search-input" inputmode="search" enterkeyhint="search" autocomplete="off" autocorrect="off" spellcheck="false" placeholder="Pesquisar..." value="${esc(q)}"
           oninput="App.setListSearch('${screen}', this.value)" />
         <select id="search-cat-${screen}" onchange="App.setListCategory('${screen}', this.value)">${opts}</select>
       </div>`;
@@ -2699,6 +2699,9 @@
       pendingReceiptId: null,
       editingTxId: null,
       listSearch: { gastos:'', ganhos:'', poupancas:'', historico:'' },
+      _searchTimers: {},
+      _globalSearchTimer: null,
+      _clientPickerTimer: null,
       listSavingsMonth: { poupancas:'', historico:'' },
       listSavingsDate: { poupancas:'', historico:'' },
       listSavingsDirection: { poupancas:'all', historico:'all' },
@@ -2754,8 +2757,15 @@
       closeSearch() { document.getElementById('search-overlay').classList.remove('open'); },
 
       runGlobalSearch() {
-        const q = document.getElementById('global-search-input').value.trim().toLowerCase();
+        clearTimeout(this._globalSearchTimer);
+        this._globalSearchTimer = setTimeout(() => this.runGlobalSearchNow(), 160);
+      },
+
+      runGlobalSearchNow() {
+        const input = document.getElementById('global-search-input');
+        const q = input?.value.trim().toLowerCase() || '';
         const el = document.getElementById('search-results');
+        if (!el) return;
         if (!q) { el.innerHTML = ''; return; }
         const hits = this.state.transactions.filter(t => {
           const c = cat(t.categoryId);
@@ -2770,6 +2780,19 @@
             <span style="font-weight:600">${sign}${fmt(t.amount)}</span>
           </button>`;
         }).join('') : '<p style="color:#94a3b8;padding:20px 0">Sem resultados</p>';
+        input?.focus({ preventScroll: true });
+      },
+
+      restoreInputFocus(inputId) {
+        const el = document.getElementById(inputId);
+        if (!el || document.activeElement?.id !== inputId) return;
+        const pos = el.selectionStart;
+        requestAnimationFrame(() => {
+          el.focus({ preventScroll: true });
+          if (pos != null) {
+            try { el.setSelectionRange(pos, pos); } catch (_) {}
+          }
+        });
       },
 
       categorySpent(categoryId) {
@@ -3143,7 +3166,7 @@
           const totalEl = document.getElementById('poupancas-total');
           if (totalEl) {
             const total = sumSavings(shown);
-            totalEl.textContent = fmt(total);
+            totalEl.textContent = `${total >= 0 ? '+' : ''}${fmt(total)}`;
             totalEl.style.color = total >= 0 ? '#047857' : '#dc2626';
           }
           return;
@@ -3168,18 +3191,32 @@
 
       setListSearch(screen, val) {
         this.listSearch[screen] = val;
-        if (screen === 'poupancas' || (screen === 'historico' && this.histType === 'savings')) this.render();
-        else this.refreshTxList();
+        clearTimeout(this._searchTimers[screen]);
+        this._searchTimers[screen] = setTimeout(() => {
+          this.refreshTxList();
+          this.restoreInputFocus(`search-input-${screen}`);
+        }, 160);
       },
 
       setSavingsMonthFilter(screen, val) {
         this.listSavingsMonth[screen] = val || '';
-        this.render();
+        if (screen === 'poupancas' || (this.screen === 'historico' && this.histType === 'savings')) {
+          this.refreshTxList();
+        } else {
+          this.render();
+        }
       },
 
       setSavingsDateFilter(screen, val) {
         this.listSavingsDate[screen] = val || '';
-        this.render();
+        const digits = (val || '').replace(/\D/g, '');
+        if (digits.length > 0 && digits.length < 8) return;
+        if (screen === 'poupancas' || (this.screen === 'historico' && this.histType === 'savings')) {
+          this.refreshTxList();
+          this.restoreInputFocus(`savings-date-${screen}`);
+        } else {
+          this.render();
+        }
       },
 
       setSavingsDirectionFilter(screen, val) {
@@ -3610,7 +3647,7 @@
 
       openClientPicker() {
         document.getElementById('client-picker-search').value = '';
-        this.filterClientPicker();
+        this.filterClientPickerNow();
         document.getElementById('client-picker-overlay').classList.add('open');
         setTimeout(() => document.getElementById('client-picker-search').focus(), 200);
       },
@@ -3620,7 +3657,13 @@
       },
 
       filterClientPicker() {
-        const q = document.getElementById('client-picker-search').value;
+        clearTimeout(this._clientPickerTimer);
+        this._clientPickerTimer = setTimeout(() => this.filterClientPickerNow(), 160);
+      },
+
+      filterClientPickerNow() {
+        const input = document.getElementById('client-picker-search');
+        const q = input?.value || '';
         const hits = this.searchClientContacts(q, 50);
         this._pickerHits = hits;
         const total = this.getAllClientContacts().length;
@@ -3628,14 +3671,15 @@
         const list = document.getElementById('client-picker-list');
         if (!hits.length) {
           list.innerHTML = '<p class="empty" style="padding:20px">Nenhuma cliente encontrada. Importa contactos (.vcf) ou cria uma marcação.</p>';
-          return;
+        } else {
+          list.innerHTML = hits.map((c, i) =>
+            `<button type="button" class="contact-sug-item" onclick="App.pickPickerClient(${i})">
+              <span class="contact-sug-name">${esc(c.name)}</span>
+              <span class="contact-sug-phone">${esc(c.phone)}</span>
+            </button>`
+          ).join('');
         }
-        list.innerHTML = hits.map((c, i) =>
-          `<button type="button" class="contact-sug-item" onclick="App.pickPickerClient(${i})">
-            <span class="contact-sug-name">${esc(c.name)}</span>
-            <span class="contact-sug-phone">${esc(c.phone)}</span>
-          </button>`
-        ).join('');
+        input?.focus({ preventScroll: true });
       },
 
       pickPickerClient(i) {
