@@ -847,7 +847,7 @@
             <div class="form-savings-card">
               <div class="lbl" id="f-savings-lbl">🐷 Poupança sugerida</div>
               <div class="form-savings-row">
-                <input type="text" inputmode="decimal" id="f-savings-amount" placeholder="0,00" />
+                <input type="text" inputmode="decimal" id="f-savings-amount" placeholder="0,00" oninput="App.updateFormSavingsSuggest()" />
                 <span style="font-size:13px;color:#047857;font-weight:500">€</span>
               </div>
               <div class="hint" id="f-savings-hint"></div>
@@ -877,7 +877,12 @@
           <div class="field" id="f-fromvault-wrap" hidden>
             <label>Tirar da poupança?</label>
             <select id="f-fromvault"></select>
-            <p class="field-hint">O valor desconta do local de poupança escolhido</p>
+            <p class="field-hint">Regista uma saída no histórico de poupanças</p>
+          </div>
+          <div class="field" id="f-tovault-wrap" hidden>
+            <label>Guardar na poupança?</label>
+            <select id="f-tovault" onchange="App.updateFormSavingsSuggest()"></select>
+            <p class="field-hint">Regista uma entrada no histórico de poupanças</p>
           </div>
           <div class="field">
             <label>Nota</label>
@@ -1301,7 +1306,7 @@
       { id:'other-income', name:'Outros ganhos', icon:'💵', color:'#6ee7b7', scope:'income' },
     ];
 
-    const APP_VERSION = '1.7.0';
+    const APP_VERSION = '1.8.0';
     const SAVINGS_CATEGORIES = [
       { id: 'general', name: 'Geral', icon: '🐷' },
       { id: 'emergency', name: 'Emergência', icon: '🛡️' },
@@ -1733,11 +1738,9 @@
       return item?.location || '';
     }
     function vaultBalance(vaultId) {
-      const transferNet = (App.state.savingsTransfers || [])
+      return (App.state.savingsTransfers || [])
         .filter(t => t.vaultId === vaultId)
         .reduce((a, t) => a + signedSavingsAmount(t), 0);
-      const expenseOut = sum((App.state.transactions || []).filter(t => t.type === 'expense' && t.fromVaultId === vaultId));
-      return transferNet - expenseOut;
     }
     function allVaultBalances() {
       return (App.state.savingsVaults || [])
@@ -1749,9 +1752,7 @@
       if (isSavingsVaultMode() && vaults.length) {
         return allVaultBalances().reduce((s, x) => s + x.balance, 0);
       }
-      const transferNet = (App.state.savingsTransfers || []).reduce((a, t) => a + signedSavingsAmount(t), 0);
-      const expenseOut = sum((App.state.transactions || []).filter(t => t.type === 'expense' && t.fromVaultId));
-      return transferNet - expenseOut;
+      return (App.state.savingsTransfers || []).reduce((a, t) => a + signedSavingsAmount(t), 0);
     }
 
     function savingsPeriodFlow(period, ref = new Date()) {
@@ -1911,9 +1912,11 @@
       const family = payer ? `<span class="tag family">${esc(payer.name)}</span>` : '';
       const vault = t.fromVaultId ? savingsVault(t.fromVaultId) : null;
       const vaultTag = vault ? `<span class="tag vault">🐷 ${esc(vault.name)}</span>` : '';
+      const depositVault = t.toVaultId ? savingsVault(t.toVaultId) : null;
+      const depositTag = depositVault ? `<span class="tag vault">🐷 → ${esc(depositVault.name)}</span>` : '';
       const sub = showDate
-        ? `${fmtDate(t.date)}${t.location?' · '+t.location:''} ${fixo}${prof}${family}${vaultTag}`
-        : `${t.location||c.name} ${fixo}${prof}${family}${vaultTag}`;
+        ? `${fmtDate(t.date)}${t.location?' · '+t.location:''} ${fixo}${prof}${family}${vaultTag}${depositTag}`
+        : `${t.location||c.name} ${fixo}${prof}${family}${vaultTag}${depositTag}`;
       const action = t.isRecurring
         ? `<button class="btn-icon" onclick="event.stopPropagation();App.openRecurringForm('${t.recurringId}')" title="Editar">✎</button>`
         : `<button class="btn-del" onclick="event.stopPropagation();App.deleteTx('${t.id}')" title="Eliminar">×</button>`;
@@ -2594,6 +2597,79 @@
       return !!findSuggestedSavingsTransfer(transfers, ctx);
     }
 
+    function findLinkedSavingsTransfer(transactionId) {
+      return (App.state.savingsTransfers || []).find(tr => tr.sourceTransactionId === transactionId);
+    }
+
+    function syncLinkedSavingsTransfer(tx, opts = {}) {
+      if (!App.state.savingsTransfers) App.state.savingsTransfers = [];
+      const linked = findLinkedSavingsTransfer(tx.id);
+      const c = cat(tx.categoryId);
+      const catName = c?.name || (tx.type === 'income' ? 'Ganho' : 'Despesa');
+
+      if (tx.type === 'expense' && tx.fromVaultId) {
+        const vault = savingsVault(tx.fromVaultId);
+        const item = {
+          id: linked?.id || uid(),
+          amount: tx.amount,
+          date: tx.date,
+          direction: 'out',
+          vaultId: tx.fromVaultId,
+          location: vault?.name,
+          categoryId: linked?.categoryId || 'general',
+          note: tx.note || `Gasto — ${catName}`,
+          sourceTransactionId: tx.id,
+          createdAt: linked?.createdAt || new Date().toISOString(),
+        };
+        if (linked) {
+          const idx = App.state.savingsTransfers.findIndex(t => t.id === linked.id);
+          if (idx >= 0) App.state.savingsTransfers[idx] = item;
+        } else {
+          App.state.savingsTransfers.unshift(item);
+        }
+        return;
+      }
+
+      const vaultAmount = opts.vaultAmount ?? linked?.amount ?? 0;
+      if (tx.type === 'income' && tx.toVaultId && vaultAmount > 0) {
+        const vault = savingsVault(tx.toVaultId);
+        const label = savingsLabelForIncome(tx.categoryId, tx.description);
+        const item = {
+          id: linked?.id || uid(),
+          amount: vaultAmount,
+          date: tx.date,
+          direction: 'in',
+          vaultId: tx.toVaultId,
+          location: vault?.name,
+          categoryId: linked?.categoryId || 'general',
+          note: tx.note || `Poupança — ${label}`,
+          sourceTransactionId: tx.id,
+          createdAt: linked?.createdAt || new Date().toISOString(),
+        };
+        if (linked) {
+          const idx = App.state.savingsTransfers.findIndex(t => t.id === linked.id);
+          if (idx >= 0) App.state.savingsTransfers[idx] = item;
+        } else {
+          App.state.savingsTransfers.unshift(item);
+        }
+        return;
+      }
+
+      if (linked) {
+        App.state.savingsTransfers = App.state.savingsTransfers.filter(t => t.id !== linked.id);
+      }
+    }
+
+    function migrateSavingsTransactionLinks() {
+      if (App.state._savingsTxSyncV1) return;
+      (App.state.transactions || []).forEach(tx => {
+        if (tx.type === 'expense' && tx.fromVaultId && !findLinkedSavingsTransfer(tx.id)) {
+          syncLinkedSavingsTransfer(tx);
+        }
+      });
+      App.state._savingsTxSyncV1 = true;
+    }
+
     const App = {
       screen: 'resumo',
       savingsTransferDirection: 'in',
@@ -2834,6 +2910,8 @@
         if (!this.state.familyPayers) { this.state.familyPayers = []; this.save(); }
         if (this.state.savingsVaultMode === undefined) { this.state.savingsVaultMode = false; this.save(); }
         if (!this.state.savingsVaults) { this.state.savingsVaults = []; this.save(); }
+        migrateSavingsTransactionLinks();
+        if (App.state._savingsTxSyncV1) this.save();
       },
 
       async bootstrap() {
@@ -4066,6 +4144,7 @@
           document.getElementById('f-amount').value='';
           document.getElementById('f-note').value='';
           document.getElementById('f-date').value=isoToDisplay(dateIso || today());
+          document.getElementById('f-savings-amount').value='';
           this.formScope='personal';
           document.querySelectorAll('#f-scope-wrap button').forEach(b=>b.classList.toggle('active',b.dataset.scope==='personal'));
           this.setNoReceipt();
@@ -4074,6 +4153,8 @@
         this.fillFormCategories(type, editing?.categoryId);
         this.updateFormPaidBy(editing?.paidById);
         this.updateFormFromVault(editing?.fromVaultId);
+        const linkedSavings = editing ? findLinkedSavingsTransfer(editing.id) : null;
+        this.updateFormToVault(editing?.toVaultId || linkedSavings?.vaultId, linkedSavings?.amount);
         this.updateFormSavingsSuggest();
         document.getElementById('form-overlay').classList.add('open');
       },
@@ -4109,6 +4190,24 @@
         sel.value = selectedId && vaults.some(v => v.id === selectedId) ? selectedId : '';
       },
 
+      updateFormToVault(selectedId, selectedAmount) {
+        const wrap = document.getElementById('f-tovault-wrap');
+        const sel = document.getElementById('f-tovault');
+        if (!wrap || !sel) return;
+        const on = this.formType === 'income' && isSavingsVaultMode();
+        wrap.hidden = !on;
+        if (!on) return;
+        const vaults = this.state.savingsVaults || [];
+        sel.innerHTML = `<option value="">Não — só registar ganho</option>${
+          vaults.map(v => `<option value="${v.id}">${esc(v.name)}</option>`).join('')
+        }`;
+        sel.value = selectedId && vaults.some(v => v.id === selectedId) ? selectedId : '';
+        const amtInput = document.getElementById('f-savings-amount');
+        if (amtInput && selectedAmount > 0) {
+          amtInput.value = String(selectedAmount).replace('.', ',');
+        }
+      },
+
       updateFormSavingsSuggest() {
         const box = document.getElementById('f-savings-suggest');
         if (!box) return;
@@ -4116,13 +4215,40 @@
           box.hidden = true;
           return;
         }
+
+        const vaultMode = isSavingsVaultMode();
         const amount = parseFloat(document.getElementById('f-amount').value.replace(',', '.')) || 0;
+        const sg = this.state.savingsGoal || DEFAULT_SAVINGS;
+        const saveAmt = Math.round(amount * sg.percent) / 100;
+        const card = box.querySelector('.form-savings-card');
+        const btn = box.querySelector('.detail-savings-btn');
+        const lbl = document.getElementById('f-savings-lbl');
+        const amtInput = document.getElementById('f-savings-amount');
+        const hint = document.getElementById('f-savings-hint');
+
+        if (vaultMode) {
+          const toVaultId = document.getElementById('f-tovault')?.value || '';
+          if (!toVaultId || amount <= 0) {
+            box.hidden = true;
+            return;
+          }
+          const vault = savingsVault(toVaultId);
+          lbl.textContent = `Valor a guardar em ${vault?.name || 'poupança'}`;
+          if (!amtInput.value || amtInput.value === '0' || amtInput.value === '0,00') {
+            amtInput.value = String(saveAmt > 0 ? saveAmt : amount).replace('.', ',');
+          }
+          amtInput.disabled = false;
+          hint.textContent = `Sugestão: ${fmt(saveAmt)} (${sg.percent}% deste ganho)`;
+          if (card) card.classList.remove('done');
+          if (btn) btn.hidden = true;
+          box.hidden = false;
+          return;
+        }
+
         if (amount <= 0) {
           box.hidden = true;
           return;
         }
-        const sg = this.state.savingsGoal || DEFAULT_SAVINGS;
-        const saveAmt = Math.round(amount * sg.percent) / 100;
         const dateIso = this.getDateInputIso('f-date');
         const catId = document.getElementById('f-category').value;
         const label = savingsLabelForIncome(catId, '');
@@ -4133,17 +4259,13 @@
           saveAmt,
           label,
         });
-        const card = box.querySelector('.form-savings-card');
-        const btn = box.querySelector('.detail-savings-btn');
-        const lbl = document.getElementById('f-savings-lbl');
-        const amtInput = document.getElementById('f-savings-amount');
-        const hint = document.getElementById('f-savings-hint');
         lbl.textContent = `🐷 Poupança sugerida (${sg.percent}%)${done ? ' ✓' : ''}`;
         amtInput.value = String(saveAmt).replace('.', ',');
         amtInput.disabled = done;
         hint.textContent = done ? 'Poupança já registada para este ganho' : `Guardar deste ganho (${fmt(amount)})`;
         if (card) card.classList.toggle('done', done);
         if (btn) {
+          btn.hidden = false;
           btn.textContent = done ? '✓ Poupança guardada' : 'Guardar poupança neste dia';
           btn.classList.toggle('done', done);
           btn.disabled = done;
@@ -4163,6 +4285,7 @@
         this.state.savingsTransfers.unshift({
           id: uid(), amount,
           date: dateIso,
+          direction: 'in',
           note: `Poupança — ${label}`,
           sourceTransactionId: this.editingTxId || undefined,
           createdAt: new Date().toISOString(),
@@ -4252,6 +4375,23 @@
             if (prev?.fromVaultId) tx.fromVaultId = prev.fromVaultId;
           }
         }
+        if (this.formType === 'income' && isSavingsVaultMode()) {
+          const toVaultId = document.getElementById('f-tovault')?.value || '';
+          const vaultAmt = toVaultId
+            ? parseFloat(document.getElementById('f-savings-amount')?.value.replace(',', '.') || '0')
+            : 0;
+          if (toVaultId) {
+            if (!vaultAmt || vaultAmt <= 0) {
+              this.toast('Introduz o valor a guardar na poupança');
+              return;
+            }
+            if (vaultAmt > amount) {
+              this.toast('O valor da poupança não pode ser maior que o ganho');
+              return;
+            }
+            tx.toVaultId = toVaultId;
+          }
+        }
         if (this.editingTxId) {
           const idx = this.state.transactions.findIndex(t => t.id === this.editingTxId);
           if (idx >= 0) this.state.transactions[idx] = tx;
@@ -4259,6 +4399,10 @@
         } else {
           this.state.transactions.unshift(tx);
         }
+        const vaultAmt = this.formType === 'income' && tx.toVaultId
+          ? parseFloat(document.getElementById('f-savings-amount')?.value.replace(',', '.') || '0')
+          : 0;
+        syncLinkedSavingsTransfer(tx, { vaultAmount: vaultAmt });
         this.save();
         this.setNoReceipt();
         this.closeForm();
@@ -4304,28 +4448,38 @@
           ${t.isRecurring ? '<div class="detail-field"><div class="lbl">Gasto fixo</div><div class="val">Sim — mensal</div></div>' : ''}
           ${!isInc && t.paidById ? `<div class="detail-field"><div class="lbl">Quem pagou</div><div class="val">${esc((familyPayer(t.paidById) || {}).name || '—')}</div></div>` : ''}
           ${!isInc && t.fromVaultId ? `<div class="detail-field"><div class="lbl">Tirado da poupança</div><div class="val">🐷 ${esc((savingsVault(t.fromVaultId) || {}).name || '—')}</div></div>` : ''}
+          ${isInc && t.toVaultId ? `<div class="detail-field"><div class="lbl">Guardado na poupança</div><div class="val">🐷 ${esc((savingsVault(t.toVaultId) || {}).name || '—')}${(() => { const l = findLinkedSavingsTransfer(t.id); return l ? ' · ' + fmt(l.amount) : ''; })()}</div></div>` : ''}
           ${t.location ? `<div class="detail-field"><div class="lbl">Local</div><div class="val">${esc(t.location)}</div></div>` : ''}
         </div>
         ${t.note ? `<div class="detail-note"><div class="lbl">Nota</div><div class="val">${esc(t.note)}</div></div>` : ''}`;
 
         if (isInc) {
-          const sg = App.state.savingsGoal || DEFAULT_SAVINGS;
-          const saveAmt = Math.round(t.amount * sg.percent) / 100;
-          const label = savingsLabelForIncome(t.categoryId, t.description);
-          const savingsDone = isSuggestedSavingsDone(App.state.savingsTransfers || [], {
-            transactionId: t.id,
-            date: t.date,
-            saveAmt,
-            label,
-          });
-          html += `<div class="detail-savings${savingsDone ? ' done' : ''}">
-            <div class="lbl">🐷 Poupança recomendada (${sg.percent}%)${savingsDone ? ' <span class="savings-done-mark">✓</span>' : ''}</div>
-            <div class="amount">${fmt(saveAmt)}</div>
-            <div class="hint">${savingsDone ? 'Poupança já registada para este ganho' : `Guardar deste ganho (${fmt(t.amount)})`}</div>
-            ${savingsDone
-              ? '<div class="savings-done-msg">✓ Poupança guardada</div>'
-              : '<button type="button" class="detail-savings-btn" onclick="App.saveSavingsFromDetail()">Guardar poupança deste ganho</button>'}
-          </div>`;
+          const linked = findLinkedSavingsTransfer(t.id);
+          if (isSavingsVaultMode() && linked?.direction === 'in') {
+            html += `<div class="detail-savings done">
+              <div class="lbl">🐷 Entrada na poupança <span class="savings-done-mark">✓</span></div>
+              <div class="amount">${fmt(linked.amount)}</div>
+              <div class="hint">${esc(vaultDisplayName(linked))} · registado no histórico de poupanças</div>
+            </div>`;
+          } else if (!isSavingsVaultMode()) {
+            const sg = App.state.savingsGoal || DEFAULT_SAVINGS;
+            const saveAmt = Math.round(t.amount * sg.percent) / 100;
+            const label = savingsLabelForIncome(t.categoryId, t.description);
+            const savingsDone = isSuggestedSavingsDone(App.state.savingsTransfers || [], {
+              transactionId: t.id,
+              date: t.date,
+              saveAmt,
+              label,
+            });
+            html += `<div class="detail-savings${savingsDone ? ' done' : ''}">
+              <div class="lbl">🐷 Poupança recomendada (${sg.percent}%)${savingsDone ? ' <span class="savings-done-mark">✓</span>' : ''}</div>
+              <div class="amount">${fmt(saveAmt)}</div>
+              <div class="hint">${savingsDone ? 'Poupança já registada para este ganho' : `Guardar deste ganho (${fmt(t.amount)})`}</div>
+              ${savingsDone
+                ? '<div class="savings-done-msg">✓ Poupança guardada</div>'
+                : '<button type="button" class="detail-savings-btn" onclick="App.saveSavingsFromDetail()">Guardar poupança deste ganho</button>'}
+            </div>`;
+          }
         }
 
         if (receipt) {
@@ -4364,7 +4518,9 @@
 
       async deleteTxFromDetail() {
         if (!this.detailTxId || !(await this.confirm('Eliminar este movimento?'))) return;
-        this.state.transactions = this.state.transactions.filter(t => t.id !== this.detailTxId);
+        const id = this.detailTxId;
+        this.state.transactions = this.state.transactions.filter(t => t.id !== id);
+        this.state.savingsTransfers = (this.state.savingsTransfers || []).filter(tr => tr.sourceTransactionId !== id);
         this.save();
         this.closeTxDetail();
         this.toast('Movimento eliminado');
@@ -4374,6 +4530,7 @@
       async deleteTx(id) {
         if(!(await this.confirm('Eliminar este movimento?'))) return;
         this.state.transactions=this.state.transactions.filter(t=>t.id!==id);
+        this.state.savingsTransfers = (this.state.savingsTransfers || []).filter(tr => tr.sourceTransactionId !== id);
         this.save(); this.toast('Movimento eliminado'); this.render();
       },
 
@@ -5149,6 +5306,7 @@
           id: uid(),
           amount: saveAmt,
           date: t.date,
+          direction: 'in',
           note: `Poupança — ${label}`,
           sourceTransactionId: t.id,
           createdAt: new Date().toISOString(),
